@@ -67,7 +67,7 @@ Set-StoragePermissions $setup ''
 & icacls.exe $appRoot /grant "IIS AppPool\${SiteName}:(OI)(CI)RX" /T | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'Pengaturan izin folder aplikasi gagal.' }
 $config = [ordered]@{
-    AllowedHosts = "$ServerIP;localhost;127.0.0.1"
+    AllowedHosts = '*'
     Storage = [ordered]@{InboxPath=$incoming;DataPath=$data;PollSeconds=5;MinimumAgeSeconds=10;MaximumFileMegabytes=100}
     Security = @{RequireHttps=$false}
 }

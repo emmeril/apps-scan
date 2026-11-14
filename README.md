@@ -163,7 +163,7 @@ Di IIS Manager:
 
 AlwaysRunning dan preload membantu importer tetap berjalan. Setelah reboot/recycle, cek status impor di halaman dokumen. Startup pertama bisa membutuhkan waktu lebih lama.
 
-Isi IP server pada AllowedHosts dan set Security:RequireHttps ke false agar cookie login mengikuti HTTP dan aplikasi tidak mengarahkan ke HTTPS. Port 8080 dipakai agar instalasi dapat berdampingan dengan Default Web Site di port 80. Jangan membuka situs ke internet hanya untuk akses kantor.
+Gunakan AllowedHosts="*" agar aplikasi menerima seluruh hostname, termasuk domain dari reverse proxy. Set Security:RequireHttps ke false agar origin IIS tetap HTTP dan aplikasi tidak memaksa pengalihan ke HTTPS. Port 8080 dipakai agar instalasi dapat berdampingan dengan Default Web Site di port 80.
 
 ## 3. Buat folder dan konfigurasi
 
@@ -189,7 +189,7 @@ Isi konfigurasi lokal:
 
 ```json
 {
-  "AllowedHosts": "192.168.1.10;localhost;127.0.0.1",
+  "AllowedHosts": "*",
   "Storage": {
     "InboxPath": "C:\\ProgramData\\ScanInbox\\Incoming",
     "DataPath": "C:\\ProgramData\\ScanInbox\\Data",
@@ -203,7 +203,7 @@ Isi konfigurasi lokal:
 
 | Pengaturan | Arti |
 |---|---|
-| AllowedHosts | Nama/IP server yang boleh dipakai client; dipisahkan titik koma, tanpa skema/port |
+| AllowedHosts | "*" menerima seluruh hostname; tidak perlu menambahkan domain reverse proxy satu per satu |
 | InboxPath | Folder **langsung** berisi hasil scan, subfolder tidak ditelusuri |
 | DataPath | Folder privat untuk database, arsip, dan key; terpisah dari InboxPath dan wwwroot |
 | PollSeconds | Interval pemeriksaan folder, 2 sampai 300 detik |
@@ -212,6 +212,14 @@ Isi konfigurasi lokal:
 | Security:RequireHttps | False untuk pemasangan HTTP yang dipilih; true mengaktifkan HTTPS redirect dan cookie Secure |
 
 Path relatif dihitung dari folder aplikasi, bukan dari browser. Perubahan konfigurasi membutuhkan restart/recycle Application Pool. Environment variable seperti `Storage__InboxPath` dapat mengganti nilai JSON; periksa bila lokasi aktual tidak sesuai.
+
+### Reverse proxy Cloudflare
+
+AllowedHosts memakai "*" sesuai pilihan pemilik. Binding situs IIS tidak memakai host name sehingga domain yang diteruskan proxy dapat diterima oleh aplikasi.
+
+Untuk origin/service URL reverse proxy, gunakan alamat HTTP IPv4 IIS yang bisa dijangkau proxy, misalnya `http://192.168.1.10:8080`. Ganti IP contoh dengan IP server sebenarnya. Binding dari script memakai IP LAN tersebut; jika Cloudflare Tunnel berjalan di server yang sama, arahkan service ke IP LAN ini, bukan otomatis ke localhost.
+
+Pengaturan AllowedHosts tidak membuat tunnel, mengubah DNS Cloudflare, atau mengganti aturan firewall jaringan. Login aplikasi tetap berlaku pada semua hostname. Konfigurasi Cloudflare itu sendiri diatur pada proxy/tunnel yang digunakan.
 
 Importer membutuhkan ukuran dan timestamp yang tidak berubah dalam dua pemeriksaan, umur minimum terpenuhi, serta file dapat dibuka tanpa penulis aktif. File yang masih terkunci akan dicoba lagi. Format lain, reparse point/symlink, file kosong, file di atas batas, dan penanda format tidak cocok tidak diarsipkan. Pemeriksaan header bukan validasi seluruh isi PDF; file rusak dapat tetap masuk dan akan menampilkan pesan gagal preview.
 
@@ -332,8 +340,8 @@ Versi pertama memakai EnsureCreated untuk membuat database awal, bukan sistem mi
 | Peringatan folder belum tersedia | Path konfigurasi dan izin baca akun Application Pool; aplikasi sengaja tidak membuat InboxPath otomatis |
 | Ada file belum dapat diarsipkan | File kosong/terlalu besar/header tidak cocok/izin ditolak; lihat log server |
 | Preview gagal, download tersedia | File mungkin rusak, terenkripsi, format gambar tidak didukung browser, atau resource PDF gagal; coba file contoh yang valid/scan ulang |
-| Login kembali terus | Pada situs HTTP, pastikan Security:RequireHttps=false; periksa juga izin Data/keys serta IP pada AllowedHosts |
-| HTTP 400 | Host tidak tercantum di AllowedHosts atau form kehilangan token antiforgery; muat ulang halaman lalu coba lagi |
+| Login kembali terus | Pada origin HTTP, pastikan Security:RequireHttps=false; periksa juga izin Data/keys dan konfigurasi proxy |
+| HTTP 400 | Pastikan konfigurasi aktif AllowedHosts="*" dan tidak ditimpa environment variable; untuk kegagalan form, muat ulang halaman agar token antiforgery diperbarui |
 | HTTP 429 | Batas login per IP tercapai; tunggu satu menit |
 | HTTP 500.30/500.31 | Hosting Bundle/runtime .NET 10 x64, web.config hasil publish, dan event log Application |
 | Client tidak bisa membuka IP:port | Binding IIS, port firewall, profil jaringan, IP yang benar, dan apakah client termasuk subnet yang diizinkan |

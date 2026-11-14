@@ -170,3 +170,12 @@ Konfigurasi diminta pemilik: HTTP melalui IP, tanpa DNS/HTTPS. Alamat deployment
 - Arsip deployment masih kosong pada saat verifikasi; tidak ada dokumen kantor/contoh pengujian yang dimasukkan ke arsip produksi.
 
 Script verifikasi membaca kredensial dari file privat yang diberikan sebagai argumen, bukan dari source atau command line password. Verifikasi ini tidak membuktikan jalur firewall dari setiap VLAN kantor, perilaku setelah reboot server, atau penerimaan scan dari panel printer.
+
+## Hostname untuk reverse proxy
+
+Atas permintaan pemilik, AllowedHosts di konfigurasi aplikasi, contoh konfigurasi, installer, dan deployment IIS diset ke "*". Application Pool ScanInbox direcycle untuk memuat konfigurasi lokal.
+
+- URL IP dan dua Host header hostname percobaan diterima IIS dengan HTTP 200 pada halaman Login, tanpa pengalihan ke HTTPS.
+- API dokumen melalui Host header percobaan tetap mengembalikan 401 tanpa sesi login.
+- Parser PowerShell installer lulus setelah perubahan nilai AllowedHosts.
+- Konfigurasi Cloudflare/DNS/tunnel belum menjadi bagian pengujian ini; pengujian membuktikan penerimaan hostname pada origin IIS.
