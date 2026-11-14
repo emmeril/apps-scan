@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="app-base" content="@Url.Content("~/")" />
+    <title>@ViewData["Title"] | Scan bersama</title>
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+</head>
+<body>
+    <a class="skip-link" href="#main">Lewati ke isi</a>
+    <header class="masthead">
+        <a class="wordmark" asp-page="/Index">Scan bersama</a>
+        @if (User.Identity?.IsAuthenticated == true)
+        {
+            <nav aria-label="Navigasi utama">
+                <a asp-page="/Index" aria-current="@(ViewContext.RouteData.Values["page"]?.ToString() == "/Index" ? "page" : null)">Dokumen</a>
+                @if (User.IsInRole("Admin"))
+                {
+                    <a asp-page="/Admin" aria-current="@(ViewContext.RouteData.Values["page"]?.ToString() == "/Admin" ? "page" : null)">Pengguna</a>
+                }
+                <a asp-page="/Account">Akun saya</a>
+                <form method="post" asp-page="/Logout"><button class="text-button" type="submit">Keluar</button></form>
+            </nav>
+        }
+    </header>
+    <main id="main" class="page-shell">
+        @RenderBody()
+    </main>
+    <footer class="page-footer">Arsip scan bersama · Akses melalui jaringan lokal</footer>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

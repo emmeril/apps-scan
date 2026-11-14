@@ -1,0 +1,17 @@
+{
+  "name": "scan-inbox",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Aset offline dan pengujian browser untuk arsip scan lokal",
+  "scripts": {
+    "assets": "node tools/prepare-assets.mjs",
+    "test:e2e": "playwright test"
+  },
+  "dependencies": {
+    "pdfjs-dist": "6.5.438"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.65.1"
+  },
+  "engines": { "node": ">=24" }
+}

@@ -1,0 +1,32 @@
+@page
+@model AdminModel
+@{ ViewData["Title"] = "Pengguna"; }
+<div class="page-heading"><div><h1>Pengguna arsip</h1><p>Semua akun aktif dapat melihat dan mendownload seluruh dokumen bersama.</p></div></div>
+@if (Model.Feedback is not null) { <p class="notice" role="status">@Model.Feedback</p> }
+<div asp-validation-summary="All" class="validation" role="alert"></div>
+<div class="admin-layout">
+    <section aria-labelledby="users-heading">
+        <h2 id="users-heading">Akun terdaftar</h2>
+        <ul class="user-list">
+        @foreach (var item in Model.Accounts)
+        {
+            <li class="user-row">
+                <div><h3>@item.Name</h3><p class="quiet">@(item.Admin ? "Admin" : "Pengguna") · @(item.Enabled ? "Aktif" : "Dinonaktifkan")</p></div>
+                @if (item.Id != Model.CurrentUserId)
+                {
+                    <form method="post" asp-page-handler="Toggle"><input type="hidden" name="id" value="@item.Id" /><button type="submit" class="secondary">@(item.Enabled ? "Nonaktifkan" : "Aktifkan")</button></form>
+                    <details><summary>Reset password</summary><form method="post" asp-page-handler="Reset" class="reset-form"><input type="hidden" name="id" value="@item.Id" /><div class="field"><label for="password-@item.Id">Password baru untuk @item.Name</label><input id="password-@item.Id" name="password" type="password" autocomplete="new-password" minlength="12" required /></div><button type="submit" class="secondary">Simpan password baru</button></form></details>
+                }
+                else { <p class="quiet">Akun kamu</p> }
+            </li>
+        }
+        </ul>
+    </section>
+    <form method="post" asp-page-handler="Create" class="form-panel">
+        <h2>Tambah pengguna</h2>
+        <div class="field"><label for="new-name">Nama pengguna</label><input id="new-name" name="username" maxlength="100" autocomplete="off" required /><small>Gunakan huruf, angka, titik, atau tanda hubung.</small></div>
+        <div class="field"><label for="new-password">Password awal</label><input id="new-password" name="password" type="password" autocomplete="new-password" minlength="12" required /><small>Minimal 12 karakter. Pengguna bisa mengubahnya setelah masuk.</small></div>
+        <label class="checkbox-label"><input name="admin" value="true" type="checkbox" /> Beri akses admin</label>
+        <button type="submit" class="primary">Buat akun</button>
+    </form>
+</div>

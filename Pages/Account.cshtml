@@ -1,0 +1,13 @@
+@page
+@model AccountModel
+@{ ViewData["Title"] = "Akun saya"; }
+<div class="page-heading"><div><h1>Akun saya</h1><p>Ubah password untuk akun @User.Identity?.Name.</p></div></div>
+<form method="post" class="form-panel narrow-form">
+    <h2>Ubah password</h2>
+    @if (Model.Success) { <p class="notice" role="status">Password berhasil diubah.</p> }
+    <div asp-validation-summary="All" class="validation" role="alert"></div>
+    <div class="field"><label asp-for="CurrentPassword">Password sekarang</label><input asp-for="CurrentPassword" type="password" autocomplete="current-password" required /></div>
+    <div class="field"><label asp-for="NewPassword">Password baru</label><input asp-for="NewPassword" type="password" autocomplete="new-password" minlength="12" required /><small>Minimal 12 karakter.</small></div>
+    <div class="field"><label asp-for="ConfirmPassword">Ulangi password baru</label><input asp-for="ConfirmPassword" type="password" autocomplete="new-password" minlength="12" required /></div>
+    <button type="submit" class="primary">Simpan password</button>
+</form>

@@ -1,0 +1,368 @@
+# Scan bersama
+
+Web arsip hasil scan untuk jaringan kantor. Epson/aplikasi penerima menyimpan file ke folder masuk; aplikasi ini mengarsipkan file tersebut dan menampilkannya setelah pengguna login. Semua pengguna aktif dapat melihat dan mengunduh seluruh dokumen bersama.
+
+Ditujukan untuk Windows Server 2022 dengan IIS. Web dapat dipakai tanpa internet setelah pemasangan dan pengunduhan dependensi selesai.
+
+## Fitur
+
+- Login akun lokal dengan ASP.NET Core Identity, password di-hash, tanpa registrasi publik.
+- Admin membuat pengguna/admin lain, mereset password, serta mengaktifkan/menonaktifkan akun.
+- Pengguna mengganti password sendiri dan logout.
+- Galeri thumbnail PDF/JPEG/PNG, pencarian nama, filter PDF/gambar, dan pagination 24 dokumen.
+- Preview PDF per halaman, zoom/pas lebar, preview gambar, dan download file arsip.
+- Pembaruan galeri setiap 10 detik saat tab aktif.
+- Deteksi file yang stabil, batas ukuran, dan pemeriksaan penanda format sebelum impor.
+- Dokumen disalin ke arsip terpisah; file masuk asli tidak dihapus atau diubah.
+- Galeri dan endpoint file memerlukan login, termasuk permintaan rentang byte PDF.
+- Semua aset PDF.js/font/WASM disajikan secara lokal, tanpa CDN.
+
+Tidak ada fitur hapus dokumen dari web pada versi ini.
+
+<details>
+<summary>Contoh tampilan</summary>
+
+Cuplikan berikut memakai akun dan dokumen **contoh pengujian**, bukan data kantor.
+
+![Halaman login](docs/screenshots/login.png)
+![Preview PDF per halaman](docs/screenshots/pdf-preview.png)
+
+</details>
+
+## Alur dan batasan printer
+
+```text
+L6260 -> aplikasi penerima scan -> Incoming
+                                  |
+                           importer aplikasi
+                                  |
+                            arsip di Data
+                                  |
+                       web login + preview
+                                  |
+                         browser pengguna
+```
+
+**Aplikasi ini mengelola file hasil scan, bukan driver scanner atau pengganti protokol Epson Cloud.** Menjalankan web tidak otomatis membuat server muncul pada menu Scan > Computer di printer.
+
+Epson Scan 2 sudah tersedia di server milik pengguna. Penerimaan scan yang dimulai dari panel printer pada Windows Server 2022 masih harus diuji langsung di lokasi. Panduan L6260 menjelaskan ScanSmart untuk scan dari panel pada Windows modern. Dukungan driver scan tidak dengan sendirinya menjamin aplikasi penerima push-scan berjalan pada Windows Server.
+
+- [Panduan L6260: scan dari panel](https://download4.epson.biz/sec_pubs/l6260_series/useg/en/GUID-729B4AC0-133D-4722-9103-427E5C3E984D.htm)
+- [Driver dan aplikasi resmi L6260](https://www.epson.co.id/Printer-InkTank/L-Series/Epson-L6260/s/SPT_C11CJ62502)
+
+Jika penerimaan dari panel belum berfungsi, web tetap dapat diuji dengan PDF yang disimpan dari Epson Scan 2. Alternatif arsitektur adalah komputer Windows yang kompatibel menerima scan, lalu menyimpan/menyalin file selesai ke folder Incoming di server. Pengujian printer tersebut terpisah dari pengujian web.
+
+## Persyaratan
+
+Pada komputer untuk **build**:
+
+- .NET 10 SDK, patch terbaru.
+- Node.js 24 LTS dan npm.
+- Internet untuk restore NuGet/npm; hasil publish bisa dipindahkan ke server offline.
+
+Pada **server produksi**:
+
+- Windows Server 2022 dengan Desktop Experience jika aplikasi Epson berjalan di server yang sama.
+- IIS, Application Initialization, dan ASP.NET Core **.NET 10 Hosting Bundle x64**.
+- Storage lokal NTFS untuk database, arsip, dan key; jangan letakkan database SQLite di network share.
+- Nama DNS internal, sertifikat HTTPS yang dipercaya client, dan akses client ke port HTTPS situs.
+- Folder Incoming yang diisi oleh aplikasi penerima scan.
+
+Client hanya memerlukan browser modern, misalnya Edge/Chrome. JavaScript harus aktif. Browser tidak perlu menginstal aplikasi Epson.
+
+## 1. Ambil source dan buat paket
+
+Jika workflow GitHub Actions repository ini sudah berhasil, buka **Actions > Build and test Scan Inbox > run yang sukses > Artifacts > scan-inbox-iis-win-x64**. Download dan ekstrak paket tersebut untuk IIS. Dengan cara ini kamu tidak perlu memasang SDK/Node di server. Artifact tersedia 14 hari; kamu dapat menjalankan workflow kembali melalui **Run workflow**. Hasil CI baru dapat dipastikan setelah source diunggah dan workflow dijalankan.
+
+Untuk build sendiri:
+
+Download source dari [emmeril/apps-scan](https://github.com/emmeril/apps-scan) melalui **Code > Download ZIP**, ekstrak, lalu buka PowerShell pada folder yang berisi ScanInbox.csproj. Jika memakai Git:
+
+```powershell
+git clone https://github.com/emmeril/apps-scan.git
+Set-Location .\apps-scan
+```
+
+```powershell
+dotnet --version
+node --version
+npm.cmd --version
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Publish.ps1
+```
+
+Script memasang dependensi dari lockfile, menyiapkan aset offline, dan publish versi Release. Hasilnya:
+
+```text
+artifacts\publish-<tanggal-jam>\       # isi aplikasi untuk IIS
+artifacts\publish-<tanggal-jam>.zip    # paket untuk dipindahkan ke server
+```
+
+Paket framework-dependent memerlukan .NET 10 Hosting Bundle pada server. SDK dan Node.js tidak diperlukan di server jika paket sudah dibangun di komputer lain.
+
+Jangan memakai folder aplikasi aktif sebagai OutputPath script. Paket tidak boleh berisi appsettings.Local.json, database, dokumen kantor, sertifikat privat, atau key sesi milik server.
+
+## 2. Siapkan IIS pada Windows Server 2022
+
+Jalankan PowerShell sebagai administrator **di server tujuan**:
+
+```powershell
+Install-WindowsFeature Web-Server, Web-Mgmt-Console, Web-AppInit -IncludeManagementTools
+```
+
+Pasang [.NET 10 Hosting Bundle](https://dotnet.microsoft.com/en-us/download/dotnet/10.0) **setelah IIS**. Jika Hosting Bundle sudah dipasang sebelum IIS, jalankan repair installer tersebut. Selesaikan restart yang diminta installer.
+
+Referensi: [hosting ASP.NET Core di IIS](https://learn.microsoft.com/en-us/aspnet/core/host-and-deploy/iis/?view=aspnetcore-10.0).
+
+Ekstrak **isi** publish.zip ke:
+
+```text
+C:\inetpub\ScanInbox\ScanInbox.dll
+C:\inetpub\ScanInbox\web.config
+C:\inetpub\ScanInbox\wwwroot\vendor\pdfjs\pdf.mjs
+```
+
+Jangan menambah lapisan folder `publish\publish` saat ekstrak.
+
+Di IIS Manager:
+
+1. Buat Application Pool bernama **ScanInbox**.
+2. .NET CLR Version: **No Managed Code**; pipeline **Integrated**.
+3. Advanced Settings: **Enable 32-Bit Applications = False**, **Start Mode = AlwaysRunning**, **Idle Time-out (minutes) = 0**.
+4. Buat situs IIS bernama **ScanInbox**, Application Pool **ScanInbox**, Physical Path **C:\inetpub\ScanInbox**.
+5. Gunakan binding **HTTPS**, misalnya port **443**, hostname **scan.kantor.test**, dan sertifikat yang sesuai.
+6. Pada situs, aktifkan **Preload Enabled = True**. Application Initialization harus sudah terpasang. Jangan matikan Anonymous Authentication IIS; login ditangani aplikasi, bukan Windows Authentication.
+7. Pastikan DNS internal/hosts client mengarah ke IP server dan sertifikat HTTPS dipercaya client.
+
+AlwaysRunning dan preload membantu importer tetap berjalan. Setelah reboot/recycle, cek status impor di halaman dokumen. Startup pertama bisa membutuhkan waktu lebih lama.
+
+Hostname `scan.kantor.test` adalah **contoh**, ganti sesuai jaringan kamu. Bila memakai IP langsung, isi IP tersebut pada AllowedHosts dan gunakan sertifikat dengan IP SAN yang sesuai. Jangan membuka situs ke internet hanya untuk akses kantor.
+
+## 3. Buat folder dan konfigurasi
+
+Contoh struktur penyimpanan:
+
+```text
+C:\ProgramData\ScanInbox\Incoming\       # tujuan aplikasi Epson
+C:\ProgramData\ScanInbox\Data\
+    scan-inbox.db                          # akun dan metadata
+    scan-inbox.db-wal / scan-inbox.db-shm   # dapat muncul saat berjalan
+    documents\                            # salinan file arsip
+    keys\                                 # key proteksi cookie/token
+```
+
+```powershell
+New-Item -ItemType Directory -Path 'C:\ProgramData\ScanInbox\Incoming' -Force
+New-Item -ItemType Directory -Path 'C:\ProgramData\ScanInbox\Data' -Force
+Copy-Item 'C:\inetpub\ScanInbox\appsettings.Local.example.json' 'C:\inetpub\ScanInbox\appsettings.Local.json'
+notepad 'C:\inetpub\ScanInbox\appsettings.Local.json'
+```
+
+Isi konfigurasi lokal:
+
+```json
+{
+  "AllowedHosts": "scan.kantor.test;localhost;127.0.0.1",
+  "Storage": {
+    "InboxPath": "C:\\ProgramData\\ScanInbox\\Incoming",
+    "DataPath": "C:\\ProgramData\\ScanInbox\\Data",
+    "PollSeconds": 5,
+    "MinimumAgeSeconds": 10,
+    "MaximumFileMegabytes": 100
+  },
+  "Security": { "RequireHttps": true }
+}
+```
+
+| Pengaturan | Arti |
+|---|---|
+| AllowedHosts | Nama/IP server yang boleh dipakai client; dipisahkan titik koma, tanpa skema/port |
+| InboxPath | Folder **langsung** berisi hasil scan, subfolder tidak ditelusuri |
+| DataPath | Folder privat untuk database, arsip, dan key; terpisah dari InboxPath dan wwwroot |
+| PollSeconds | Interval pemeriksaan folder, 2 sampai 300 detik |
+| MinimumAgeSeconds | Umur minimum file sejak perubahan terakhir, 2 sampai 3600 detik |
+| MaximumFileMegabytes | Batas setiap file, 1 sampai 1024 MiB; default 100 |
+| Security:RequireHttps | True untuk produksi; false hanya untuk uji loopback lokal |
+
+Path relatif dihitung dari folder aplikasi, bukan dari browser. Perubahan konfigurasi membutuhkan restart/recycle Application Pool. Environment variable seperti `Storage__InboxPath` dapat mengganti nilai JSON; periksa bila lokasi aktual tidak sesuai.
+
+Importer membutuhkan ukuran dan timestamp yang tidak berubah dalam dua pemeriksaan, umur minimum terpenuhi, serta file dapat dibuka tanpa penulis aktif. File yang masih terkunci akan dicoba lagi. Format lain, reparse point/symlink, file kosong, file di atas batas, dan penanda format tidak cocok tidak diarsipkan. Pemeriksaan header bukan validasi seluruh isi PDF; file rusak dapat tetap masuk dan akan menampilkan pesan gagal preview.
+
+Gunakan nama file unik dari aplikasi Epson, misalnya tanggal/jam. File berbeda isi yang memakai nama sama akan menjadi entri arsip baru; nama dan isi yang sama tidak diimpor ulang. Menghapus file asal tidak menghapus salinan arsip. Simpan proses input pada satu instance aplikasi; jangan jalankan beberapa worker terhadap folder Data yang sama.
+
+## 4. Atur izin folder
+
+Setelah Application Pool dibuat, jalankan sebagai administrator:
+
+```powershell
+icacls 'C:\inetpub\ScanInbox' /grant 'IIS AppPool\ScanInbox:(OI)(CI)RX'
+icacls 'C:\ProgramData\ScanInbox\Incoming' /grant 'IIS AppPool\ScanInbox:(OI)(CI)RX'
+icacls 'C:\ProgramData\ScanInbox\Data' /grant 'IIS AppPool\ScanInbox:(OI)(CI)M'
+```
+
+Akun Windows yang menjalankan Epson membutuhkan izin menulis ke Incoming. Jika akun itu adalah `KANTOR\scanoperator`, contoh pemberian izinnya:
+
+```powershell
+icacls 'C:\ProgramData\ScanInbox\Incoming' /grant 'KANTOR\scanoperator:(OI)(CI)M'
+```
+
+Ganti nama akun contoh dengan akun sebenarnya. Hindari memberi Everyone akses tulis. Folder Data menyimpan seluruh dokumen dan key; batasi akses NTFS hanya pada administrator/backup operator yang dibutuhkan serta Application Pool. Key proteksi disimpan di filesystem; proteksi folder dan backup key sama pentingnya dengan database. Jangan jadikan Data sebagai virtual directory atau folder static IIS.
+
+Jika penerima scan berada di komputer lain, bagikan **Incoming saja** dengan izin akun khusus. Atur izin share dan NTFS. Arsip, database, serta key tetap lokal di server dan tidak perlu dibagikan ke client.
+
+## 5. Buat admin pertama
+
+Pada PowerShell di server:
+
+```powershell
+Set-Location 'C:\inetpub\ScanInbox'
+dotnet .\ScanInbox.dll --create-admin admin
+```
+
+Masukkan password minimal 12 karakter dua kali. Password tidak ditampilkan dan tidak ditaruh di command line atau konfigurasi. Tidak ada username/password bawaan. Akun disimpan ke DataPath dari appsettings.Local.json; selalu jalankan perintah dari folder aplikasi agar memakai konfigurasi yang benar.
+
+Mulai/recycle situs, buka alamat HTTPS server, lalu login dengan admin tersebut.
+
+## 6. Sambungkan folder hasil scan
+
+1. Di aplikasi Epson, atur hasil scan PDF/JPEG/PNG ke folder Incoming.
+2. Uji satu scan dari Epson Scan 2. Pastikan file muncul di Incoming.
+3. Tunggu sekitar 10 sampai 20 detik setelah file selesai ditulis, kemudian buka web.
+4. Dokumen harus muncul dengan thumbnail. Klik dokumen, periksa preview, lalu download.
+5. Setelah jalur ini berhasil, uji scan dari **panel L6260 > Scan > Computer > server**. Jika nama server tidak muncul, selesaikan pengaturan penerima scan Epson secara terpisah; web tidak mendaftarkan tujuan ke printer.
+
+**Pastikan mode scan yang dipilih benar-benar menyimpan file tanpa menunggu konfirmasi pada desktop.** ScanSmart dapat membuka antarmuka di komputer; uji juga setelah lock screen, logout, dan reboot. Aplikasi desktop Epson mungkin membutuhkan sesi pengguna aktif. Web di IIS sendiri tidak membutuhkan sesi desktop aktif.
+
+Saat menyalin file manual/otomatis dari komputer lain, salin ke nama berakhiran `.partial` dahulu, lalu rename menjadi `.pdf`, `.jpg`, atau `.png` setelah penulisan selesai. Ini menghindari impor terlalu awal saat penulis menutup file sementara selama proses scan panjang.
+
+## Penggunaan sehari-hari
+
+### Mengambil dokumen
+
+1. Buka alamat web lokal yang diberikan admin, misalnya `https://scan.kantor.test`.
+2. Login. Semua dokumen bersama bisa dilihat oleh semua pengguna aktif.
+3. Cari melalui nama file atau pilih jenis dokumen.
+4. Klik thumbnail untuk membuka preview.
+5. Untuk PDF gunakan Sebelumnya/Berikutnya dan pilihan ukuran preview. Untuk gambar, gunakan pilihan ukuran preview.
+6. Klik **Download dokumen** untuk mengambil salinan file. Tutup preview dengan **Tutup** atau tombol Escape.
+7. Klik **Keluar** setelah selesai pada komputer bersama.
+
+Preview dirender sebagai gambar halaman; pencarian isi PDF/OCR, text selection, dan anotasi belum disediakan. Pencarian galeri berdasarkan nama file. Jam ditampilkan menurut zona waktu browser pengguna; database menyimpan waktu UTC. Label **Masuk** adalah waktu impor arsip, bukan waktu fisik dokumen dipindai.
+
+Pembaruan galeri otomatis setiap 10 detik saat tab aktif. Tombol **Perbarui** memeriksa daftar saat itu juga; tombol ini tidak memulai scan atau memaksa proses Epson.
+
+### Mengelola akun
+
+- Admin membuka **Pengguna**, mengisi nama dan password awal, lalu klik **Buat akun**.
+- Centang **Beri akses admin** hanya bila akun juga perlu mengelola pengguna.
+- Pengguna membuka **Akun saya** untuk mengganti password sendiri.
+- Admin memakai **Reset password** pada baris akun untuk membantu pengguna lain. Pengguna tersebut perlu login kembali.
+- **Nonaktifkan** membatalkan sesi akun pada permintaan berikutnya. Admin tidak bisa menonaktifkan akun sendiri melalui web.
+- Lima kegagalan password mengunci akun selama 15 menit. Halaman login juga dibatasi 30 request/menit per IP; klien pada IP bersama berbagi batas itu.
+- Akun lokal aplikasi terpisah dari akun Windows/Active Directory. SSO AD belum disediakan.
+
+### Lupa password admin
+
+Jalankan dari folder aplikasi pada server dengan akses administrator:
+
+```powershell
+dotnet .\ScanInbox.dll --reset-password admin
+```
+
+Masukkan password baru dua kali. Perintah mereset lockout dan membatalkan sesi sebelumnya. Akun yang dinonaktifkan tetap nonaktif; gunakan admin lain untuk mengaktifkannya.
+
+## Backup dan pemulihan
+
+Backup harus mencakup **seluruh DataPath**, konfigurasi lokal, dan file Incoming yang belum diimpor bila dibutuhkan. Database saja tidak berisi file PDF/gambar. Key saja bukan pengganti password, tetapi termasuk data privat server.
+
+Untuk salinan konsisten sederhana:
+
+1. Hentikan Application Pool ScanInbox sementara.
+2. Salin seluruh folder Data, termasuk file `-wal`/`-shm` jika masih ada, ke media backup dengan akses terbatas.
+3. Backup appsettings.Local.json secara privat, bukan ke GitHub.
+4. Mulai kembali Application Pool dan cek galeri.
+
+Saat restore, hentikan aplikasi, pulihkan Data beserta konfigurasi, periksa NTFS ACL, lalu mulai kembali. Uji login, thumbnail, dan download. Restore dari server berbeda mungkin membatalkan sesi; pengguna dapat login kembali. Gunakan backup terjadwal yang konsisten dengan SQLite jika tidak ingin menghentikan aplikasi.
+
+Ukuran arsip terus bertambah. Pantau ruang disk dan tentukan kebijakan retensi/backup kantor. Versi ini tidak menghapus data otomatis.
+
+## Update aplikasi
+
+1. Backup data/config.
+2. Bangun paket baru dari source dan jalankan pengujian.
+3. Hentikan Application Pool sebelum mengganti file aplikasi.
+4. Salin paket baru ke folder situs, **pertahankan appsettings.Local.json dan folder Data**.
+5. Mulai kembali situs dan uji login/preview/download.
+
+Versi pertama memakai EnsureCreated untuk membuat database awal, bukan sistem migrasi otomatis. Jika versi selanjutnya mengubah skema, ikuti panduan migrasi versi tersebut. Jangan menghapus database agar aplikasi bisa start; itu juga menghapus akun dan metadata.
+
+## Troubleshooting
+
+| Gejala | Periksa |
+|---|---|
+| Server tidak muncul di panel L6260 | Aplikasi penerima scan Epson, kompatibilitas Windows Server, firewall dan penemuan jaringan; keberhasilan web tidak membuktikan jalur ini |
+| File ada di Incoming tetapi belum muncul | Tunggu umur minimum + dua pemeriksaan; pastikan file tidak terkunci, bukan `.partial`, ekstensi didukung, ukuran di bawah batas, berada langsung dalam Incoming |
+| Peringatan folder belum tersedia | Path konfigurasi dan izin baca akun Application Pool; aplikasi sengaja tidak membuat InboxPath otomatis |
+| Ada file belum dapat diarsipkan | File kosong/terlalu besar/header tidak cocok/izin ditolak; lihat log server |
+| Preview gagal, download tersedia | File mungkin rusak, terenkripsi, format gambar tidak didukung browser, atau resource PDF gagal; coba file contoh yang valid/scan ulang |
+| Login kembali terus | Akses melalui HTTPS yang benar, izin folder Data/keys, dan nama host; cookie produksi memerlukan HTTPS |
+| HTTP 400 | Host tidak tercantum di AllowedHosts atau form kehilangan token antiforgery; muat ulang halaman lalu coba lagi |
+| HTTP 429 | Batas login per IP tercapai; tunggu satu menit |
+| HTTP 500.30/500.31 | Hosting Bundle/runtime .NET 10 x64, web.config hasil publish, dan event log Application |
+| Tidak ada aset PDF.js | Build harus menjalankan npm ci dan npm run assets sebelum dotnet publish |
+| Scan berhenti setelah logout Windows | Jalur Epson mungkin menggunakan aplikasi desktop yang membutuhkan sesi aktif; cek perilaku penerima scan secara terpisah |
+| Tidak ada scan baru setelah IIS idle/reboot | AlwaysRunning, preload, Web-AppInit, idle timeout, status situs, serta status impor di web |
+
+Untuk diagnostik sementara, hentikan Application Pool lalu jalankan dari folder situs:
+
+```powershell
+dotnet .\ScanInbox.dll --urls https://localhost:5443
+```
+
+Ini membutuhkan sertifikat default Kestrel yang dikonfigurasi. Untuk memeriksa startup tanpa sertifikat, gunakan **hanya loopback lokal**:
+
+```powershell
+$env:Security__RequireHttps = 'false'
+dotnet .\ScanInbox.dll --urls http://127.0.0.1:5080
+# Setelah selesai, tekan Ctrl+C, lalu hapus override sebelum penggunaan berikutnya:
+Remove-Item Env:Security__RequireHttps
+```
+
+Jangan menjalankan instance diagnostik bersamaan dengan worker IIS untuk DataPath yang sama. Kembalikan situs IIS setelah diagnostik selesai. Untuk masalah IIS, lihat Windows Event Viewer; aktifkan stdout logging IIS sementara hanya bila perlu, dengan folder log privat dan izin yang benar, lalu matikan kembali.
+
+## Menjalankan lokal untuk pengembangan
+
+```powershell
+npm.cmd ci
+npm.cmd run assets
+dotnet build
+dotnet run --no-launch-profile -- --create-admin admin
+```
+
+Untuk perintah admin tersebut, tambahkan konfigurasi path melalui appsettings.Local.json bila ingin folder berbeda. Setelah admin dibuat:
+
+```powershell
+New-Item -ItemType Directory -Path .\runtime\inbox -Force
+dotnet run --launch-profile Local
+```
+
+Buka `http://127.0.0.1:5080`. Profile Local menonaktifkan keharusan HTTPS hanya untuk pengujian loopback. Masukkan contoh PDF ke `runtime\inbox`. Folder runtime diabaikan Git. Pengaturan produksi tetap RequireHttps true.
+
+## Pengujian otomatis
+
+```powershell
+dotnet build
+npx.cmd playwright install chromium
+npm.cmd run test:e2e
+```
+
+Jika dotnet tidak ada di PATH, set environment variable DOTNET_EXE ke path dotnet.exe sebelum pengujian. Pengujian membuat folder runtime baru di test-results, akun dengan password acak dalam memori proses, serta dokumen contoh. Tidak memakai dokumen kantor atau printer fisik.
+
+Skenario mencakup pembatasan akses, login/antiforgery, impor file, file terkunci/tidak valid/terlalu besar, duplikasi, integritas download, HTTP range, preview PDF/gambar/rusak, pencarian, pagination, refresh, layout, admin, perubahan password, dan pembatalan sesi.
+
+Lihat [VALIDATION.md](VALIDATION.md) untuk hasil pengujian dan batas verifikasi. Printer fisik serta konfigurasi IIS produksi perlu diuji di lingkungan kantor.
+
+## Isi repository dan data privat
+
+Source, README, konfigurasi **contoh**, lockfile, dan pengujian boleh masuk repository. `.gitignore` mengecualikan runtime, database, dokumen, private key/sertifikat, hasil build, serta appsettings.Local.json. Jangan menaruh dokumen hasil scan dalam wwwroot, source fixture, atau screenshot yang akan diunggah.
+
+Lihat [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) untuk komponen dan lisensi pihak ketiga.

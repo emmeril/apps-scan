@@ -1,0 +1,20 @@
+@page
+@model LoginModel
+@{
+    ViewData["Title"] = "Masuk";
+}
+<section class="login-layout">
+    <div class="login-copy">
+        <h1>Dokumen hasil scan,<br />di satu tempat.</h1>
+        <p>Masuk untuk melihat preview dan mengunduh dokumen bersama.</p>
+        <p class="quiet">Gunakan akun yang diberikan admin kantor.</p>
+    </div>
+    <form method="post" class="form-panel login-form">
+        <h2>Masuk ke arsip</h2>
+        <div asp-validation-summary="ModelOnly" class="validation" role="alert"></div>
+        <input type="hidden" asp-for="ReturnUrl" />
+        <div class="field"><label asp-for="Username">Nama pengguna</label><input asp-for="Username" autocomplete="username" maxlength="100" required /><span asp-validation-for="Username" class="validation"></span></div>
+        <div class="field"><label asp-for="Password">Password</label><input asp-for="Password" type="password" autocomplete="current-password" required /><span asp-validation-for="Password" class="validation"></span></div>
+        <button type="submit" class="primary full-width">Masuk</button>
+    </form>
+</section>

@@ -1,0 +1,46 @@
+@page
+@{
+    ViewData["Title"] = "Dokumen bersama";
+}
+<div class="page-heading">
+    <div><h1>Dokumen bersama</h1><p>Pilih preview untuk memastikan dokumen yang ingin kamu ambil.</p></div>
+    <p class="account-label">Masuk sebagai <strong>@User.Identity?.Name</strong></p>
+</div>
+<section aria-label="Cari dokumen" class="search-shelf">
+    <form id="search-form" role="search">
+        <div class="field search-field"><label for="search">Cari nama dokumen</label><input id="search" name="search" type="search" maxlength="160" placeholder="Ketik sebagian nama file" /></div>
+        <div class="field"><label for="type">Jenis dokumen</label><select id="type" name="type"><option value="">Semua jenis</option><option value="pdf">PDF</option><option value="image">Gambar</option></select></div>
+        <button type="submit" class="primary">Cari dokumen</button>
+        <button id="refresh" type="button" class="secondary">Perbarui</button>
+    </form>
+</section>
+<div class="collection-heading">
+    <h2 id="result-heading">Hasil scan</h2>
+    <p id="sync-status" class="quiet" aria-live="polite">Menghubungkan ke arsip…</p>
+</div>
+<div id="message" class="notice" role="status">Memuat daftar dokumen…</div>
+<div id="import-warning" class="notice warning" role="status" hidden></div>
+<section id="gallery" class="document-grid" aria-label="Daftar hasil scan" aria-busy="true"></section>
+<nav id="pagination" class="pagination" aria-label="Halaman hasil" hidden>
+    <button id="previous" class="secondary" type="button">Sebelumnya</button>
+    <span id="page-label"></span>
+    <button id="next" class="secondary" type="button">Berikutnya</button>
+</nav>
+<dialog id="preview-dialog" aria-labelledby="preview-name">
+    <div class="preview-header"><div><h2 id="preview-name">Preview dokumen</h2><p id="preview-meta" class="quiet"></p></div><button id="close-preview" class="secondary" type="button">Tutup</button></div>
+    <div class="preview-toolbar">
+        <div id="pdf-controls" class="pdf-controls">
+            <button id="previous-page" class="secondary" type="button" aria-label="Halaman PDF sebelumnya">Sebelumnya</button>
+            <span id="pdf-page-label" aria-live="polite"></span>
+            <button id="next-page" class="secondary" type="button" aria-label="Halaman PDF berikutnya">Berikutnya</button>
+        </div>
+        <div class="field zoom-field"><label for="zoom">Ukuran preview</label><select id="zoom"><option value="fit">Pas lebar</option><option value="1">100%</option><option value="1.5">150%</option><option value="2">200%</option></select></div>
+        <a id="download" class="button primary" download>Download dokumen</a>
+    </div>
+    <p id="preview-status" class="preview-status" role="status">Memuat preview…</p>
+    <div id="preview-stage" class="preview-stage"><canvas id="pdf-canvas" aria-label="Halaman dokumen PDF"></canvas><img id="image-preview" alt="" width="1000" height="1414" hidden /></div>
+    <p class="preview-note">Preview membantu mengenali isi. File download menggunakan dokumen asli yang diarsipkan.</p>
+</dialog>
+@section Scripts {
+    <script type="module" src="~/js/documents.js" asp-append-version="true"></script>
+}
