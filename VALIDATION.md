@@ -14,6 +14,7 @@ Tanggal: 14 November 2026.
 - Uji contrast: 14 pasangan lulus; teks terkecil yang diuji 5,95:1, batas komponen minimum 3,44:1.
 - npm audit pada saat install: 0 kerentanan yang dilaporkan.
 - `dotnet list package --vulnerable --include-transitive`: tidak ada paket rentan yang dilaporkan sumber NuGet saat pemeriksaan.
+- [GitHub Actions run 43580671076](https://github.com/emmeril/apps-scan/actions/runs/43580671076) berhasil: build, tujuh skenario browser/integrasi, pemeriksaan kontras, publish IIS, dan upload artifact `scan-inbox-iis-win-x64`. Source aplikasi yang diuji adalah commit `34b04ef720fda7dedb7f10417f7d8d7db7829106`; pembaruan catatan verifikasi setelahnya hanya mengubah dokumentasi.
 
 Satu pemeriksaan awal pada tes keyboard menggunakan focus programatik setelah klik mouse dan tidak mengaktifkan `:focus-visible`; tes diperbaiki untuk memakai Tab sebenarnya. Pemeriksaan keyboard sesudahnya lulus. Pemeriksaan akhir juga menemukan dan memperbaiki penandaan UTC saat membaca timestamp SQLite serta pengecualian folder hasil tes dari paket publish.
 
@@ -147,6 +148,5 @@ Craftsmanship C-1 sampai C-5 PASS: alasan visual tercatat, kontrol bekerja, isi 
 - Konfigurasi IIS, HTTPS, sertifikat, DNS, izin folder dan firewall di deployment kantor.
 - Browser Safari/Firefox, screen reader, keyboard virtual HP fisik, dan volume dokumen besar.
 - PDF terenkripsi, semua variasi encoding/codec scanner, dan beban beberapa pengguna bersamaan.
-- Workflow GitHub Actions; hasilnya baru bisa dinilai setelah source diunggah ke repository tujuan.
 
 Web diuji melalui Kestrel loopback pada Windows Server 2022 dengan penyimpanan sementara dan dokumen contoh. Pengujian ini tidak menyatakan integrasi printer atau deployment IIS kantor sudah selesai.
