@@ -165,7 +165,7 @@ test('pagination, automatic discovery and layouts at phone, tablet, desktop and 
     expect(await page.evaluate(() => document.activeElement !== document.body)).toBe(true);
 });
 
-test('admin creates/resets/disables accounts; users change password; disabled sessions end', async ({ page, browser }) => {
+test('only admins change passwords; ordinary users cannot bypass GET or POST restrictions', async ({ page, browser }) => {
     await login(page);
     await page.getByRole('link', { name: 'Pengguna', exact: true }).click();
     await page.locator('#new-name').fill('client1');
@@ -176,19 +176,29 @@ test('admin creates/resets/disables accounts; users change password; disabled se
     const context = await browser.newContext();
     const client = await context.newPage();
     await login(client, 'client1', initial);
+    await expect(client.getByRole('link', { name: 'Akun saya', exact: true })).toHaveCount(0);
     await client.goto('/Admin');
     await expect(client.getByRole('heading', { name: 'Akses dibatasi' })).toBeVisible();
     await client.getByRole('link', { name: 'Kembali ke dokumen' }).click();
-    await client.getByRole('link', { name: 'Akun saya' }).click();
-    await client.getByLabel('Password sekarang', { exact: true }).fill(initial);
-    await client.getByLabel('Password baru', { exact: true }).fill(initial + 'b');
-    await client.getByLabel('Ulangi password baru', { exact: true }).fill(initial + 'b');
-    await client.getByRole('button', { name: 'Simpan password', exact: true }).click();
-    await expect(client.getByRole('status')).toContainText('Password berhasil diubah');
+    const token = await client.locator('input[name="__RequestVerificationToken"]').first().inputValue();
+    const selfChange = await client.request.post('/Account', {
+        form: { __RequestVerificationToken: token, CurrentPassword: initial, NewPassword: initial + 'b', ConfirmPassword: initial + 'b' },
+        maxRedirects: 0
+    });
+    expect(selfChange.status()).toBe(302);
+    expect(selfChange.headers().location).toContain('/Denied');
+    const row = page.locator('.user-row').filter({ has: page.getByRole('heading', { name: 'client1', exact: true }) });
+    const id = await row.locator('input[name="id"]').first().inputValue();
+    const forgedAdminReset = await client.request.post('/Admin?handler=Reset', {
+        form: { __RequestVerificationToken: token, id, password: initial + 'b' }, maxRedirects: 0
+    });
+    expect(forgedAdminReset.status()).toBe(302);
+    expect(forgedAdminReset.headers().location).toContain('/Denied');
+    await client.goto('/Account');
+    await expect(client.getByRole('heading', { name: 'Akses dibatasi' })).toBeVisible();
     await client.getByRole('button', { name: 'Keluar', exact: true }).click();
     await expect(client).toHaveURL(/Login/);
-    await login(client, 'client1', initial + 'b');
-    const row = page.locator('.user-row').filter({ has: page.getByRole('heading', { name: 'client1', exact: true }) });
+    await login(client, 'client1', initial);
     await row.getByText('Reset password', { exact: true }).click();
     await row.getByLabel('Password baru untuk client1').fill(initial + 'c');
     await row.getByRole('button', { name: 'Simpan password baru' }).click();

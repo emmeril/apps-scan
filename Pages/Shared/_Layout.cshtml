@@ -18,8 +18,8 @@
                 @if (User.IsInRole("Admin"))
                 {
                     <a asp-page="/Admin" aria-current="@(ViewContext.RouteData.Values["page"]?.ToString() == "/Admin" ? "page" : null)">Pengguna</a>
+                    <a asp-page="/Account">Akun saya</a>
                 }
-                <a asp-page="/Account">Akun saya</a>
                 <form method="post" asp-page="/Logout"><button class="text-button" type="submit">Keluar</button></form>
             </nav>
         }

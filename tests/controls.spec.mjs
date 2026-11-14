@@ -37,6 +37,11 @@ test('remaining account controls, validation, keyboard navigation and long filen
     await page.getByLabel('Ulangi password baru', { exact: true }).fill(process.env.INBOX_TEST_PASSWORD + 'z');
     await page.getByRole('button', { name: 'Simpan password', exact: true }).click();
     await expect(page.getByRole('alert')).not.toBeEmpty();
+    await page.getByLabel('Password sekarang', { exact: true }).fill(process.env.INBOX_TEST_PASSWORD);
+    await page.getByLabel('Password baru', { exact: true }).fill(process.env.INBOX_TEST_PASSWORD + 'z');
+    await page.getByLabel('Ulangi password baru', { exact: true }).fill(process.env.INBOX_TEST_PASSWORD + 'z');
+    await page.getByRole('button', { name: 'Simpan password', exact: true }).click();
+    await expect(page.getByRole('status')).toContainText('Password berhasil diubah');
     await page.getByRole('link', { name: 'Dokumen', exact: true }).click();
     const name = "contoh-dokumen-pengujian-dengan-nama-sangat-panjang-untuk-memeriksa-tampilan-mobile.pdf";
     const path = resolve(process.env.INBOX_TEST_RUNTIME, 'inbox', name);

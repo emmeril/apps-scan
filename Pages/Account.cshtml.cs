@@ -1,10 +1,12 @@
 using System.ComponentModel.DataAnnotations;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using ScanInbox.Data;
 
 namespace ScanInbox.Pages;
+[Authorize(Roles = "Admin")]
 public sealed class AccountModel(UserManager<AppUser> users, SignInManager<AppUser> signIn) : PageModel {
     [BindProperty, Required] public string CurrentPassword { get; set; } = "";
     [BindProperty, Required, MinLength(12)] public string NewPassword { get; set; } = "";

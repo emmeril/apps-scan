@@ -25,7 +25,7 @@
     <form method="post" asp-page-handler="Create" class="form-panel">
         <h2>Tambah pengguna</h2>
         <div class="field"><label for="new-name">Nama pengguna</label><input id="new-name" name="username" maxlength="100" autocomplete="off" required /><small>Gunakan huruf, angka, titik, atau tanda hubung.</small></div>
-        <div class="field"><label for="new-password">Password awal</label><input id="new-password" name="password" type="password" autocomplete="new-password" minlength="12" required /><small>Minimal 12 karakter. Pengguna bisa mengubahnya setelah masuk.</small></div>
+        <div class="field"><label for="new-password">Password awal</label><input id="new-password" name="password" type="password" autocomplete="new-password" minlength="12" required /><small>Minimal 12 karakter. Password pengguna hanya dapat diubah oleh admin.</small></div>
         <label class="checkbox-label"><input name="admin" value="true" type="checkbox" /> Beri akses admin</label>
         <button type="submit" class="primary">Buat akun</button>
     </form>

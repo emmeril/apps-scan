@@ -10,7 +10,7 @@ Konfigurasi pemasangan yang dipilih pemilik: **HTTP melalui IP server**, misalny
 
 - Login akun lokal dengan ASP.NET Core Identity, password di-hash, tanpa registrasi publik.
 - Admin membuat pengguna/admin lain, mereset password, serta mengaktifkan/menonaktifkan akun.
-- Pengguna mengganti password sendiri dan logout.
+- Perubahan password hanya oleh admin; pengguna biasa dapat login dan logout.
 - Galeri thumbnail PDF/JPEG/PNG, pencarian nama, filter PDF/gambar, dan pagination 24 dokumen.
 - Preview PDF per halaman, zoom/pas lebar, preview gambar, dan download file arsip.
 - Pembaruan galeri setiap 10 detik saat tab aktif.
@@ -290,7 +290,8 @@ Pembaruan galeri otomatis setiap 10 detik saat tab aktif. Tombol **Perbarui** me
 
 - Admin membuka **Pengguna**, mengisi nama dan password awal, lalu klik **Buat akun**.
 - Centang **Beri akses admin** hanya bila akun juga perlu mengelola pengguna.
-- Pengguna membuka **Akun saya** untuk mengganti password sendiri.
+- Hanya admin yang memiliki menu **Akun saya** untuk mengganti password admin tersebut.
+- Pengguna biasa tidak dapat mengubah password sendiri, termasuk melalui URL langsung atau pengiriman form manual. Hubungi admin untuk penggantian password.
 - Admin memakai **Reset password** pada baris akun untuk membantu pengguna lain. Pengguna tersebut perlu login kembali.
 - **Nonaktifkan** membatalkan sesi akun pada permintaan berikutnya. Admin tidak bisa menonaktifkan akun sendiri melalui web.
 - Lima kegagalan password mengunci akun selama 15 menit. Halaman login juga dibatasi 30 request/menit per IP; klien pada IP bersama berbagi batas itu.

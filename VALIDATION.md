@@ -45,7 +45,7 @@ Satu pemeriksaan awal pada tes keyboard menggunakan focus programatik setelah kl
 | Deteksi otomatis | File baru muncul tanpa memuat ulang halaman secara manual |
 | Admin | Membuat pengguna, membuat admin kedua, menolak nama duplikat, reset, nonaktif/aktif |
 | Batas role | Pengguna biasa mendapat halaman akses dibatasi saat membuka Admin |
-| Password | Perubahan sendiri berhasil; konfirmasi berbeda dan password lama salah ditolak |
+| Password | Admin mengubah password sendiri dan mereset pengguna; user biasa ditolak pada GET/POST perubahan password |
 | Sesi | Reset/nonaktif akun membatalkan sesi pada permintaan berikutnya; login nonaktif ditolak |
 | Folder masuk hilang | Peringatan muncul; dokumen arsip tetap dapat diakses |
 | Offline pada runtime | Browser tidak meminta aset ke domain eksternal dalam skenario preview |
@@ -59,7 +59,7 @@ Setiap kontrol berikut dioperasikan melalui browser otomatis, bukan hanya diperi
 | Masuk, termasuk Enter | Validasi wajib isi, pesan gagal, kemudian galeri |
 | Scan bersama / Dokumen | Navigasi ke galeri |
 | Pengguna | Navigasi ke pengelolaan akun untuk admin |
-| Akun saya | Form perubahan password |
+| Akun saya | Form perubahan password khusus admin; menu tidak muncul untuk user biasa |
 | Keluar | Cookie sign-in diakhiri dan halaman login tampil |
 | Cari nama + Cari dokumen | Hasil sesuai nama atau pesan hasil kosong |
 | Jenis dokumen | Pilihan gambar menghasilkan hanya PNG contoh |
@@ -74,7 +74,7 @@ Setiap kontrol berikut dioperasikan melalui browser otomatis, bukan hanya diperi
 | Beri akses admin | Checkbox menghasilkan akun admin kedua |
 | Reset password / Simpan password baru | Details terbuka, password berubah, sesi lama dibatalkan |
 | Nonaktifkan/Aktifkan | Status berubah; akses akun mengikuti status |
-| Simpan password | Menolak input tidak cocok/password lama salah; berhasil untuk input benar |
+| Simpan password | Untuk admin, menolak input tidak cocok/password lama salah dan berhasil untuk input benar; user biasa ditolak di backend |
 | Keyboard Tab/Shift+Tab/Enter | Fokus bergerak ke kontrol dan thumbnail dapat diaktifkan |
 
 Tidak ada error JavaScript uncaught pada skenario preview dan pemeriksaan kontrol tambahan. Respons yang sengaja gagal dalam tes adalah bagian dari pengujian error state.
@@ -179,3 +179,19 @@ Atas permintaan pemilik, AllowedHosts di konfigurasi aplikasi, contoh konfiguras
 - API dokumen melalui Host header percobaan tetap mengembalikan 401 tanpa sesi login.
 - Parser PowerShell installer lulus setelah perubahan nilai AllowedHosts.
 - Konfigurasi Cloudflare/DNS/tunnel belum menjadi bagian pengujian ini; pengujian membuktikan penerimaan hostname pada origin IIS.
+
+## Perubahan password hanya oleh admin
+
+Permintaan pemilik: user biasa tidak dapat mengganti password sendiri. Admin tetap dapat mengganti password sendiri dan mengganti password pengguna melalui halaman Pengguna.
+
+- `/Account` diberi `[Authorize(Roles = "Admin")]` pada PageModel untuk seluruh GET/POST.
+- Menu Akun saya hanya dirender bagi admin. Petunjuk pembuatan akun menjelaskan bahwa password pengguna hanya diubah admin.
+- Tujuh skenario browser/integrasi lulus setelah perubahan, 44,5 detik; build berhasil tanpa warning/error.
+- User biasa tidak melihat menu Akun saya dan ditolak saat membuka `/Account` langsung.
+- POST `/Account` memakai token antiforgery yang valid tetap ditolak bagi user biasa.
+- Upaya user biasa memanggil handler reset password admin dengan token valid juga ditolak.
+- Login dengan password semula tetap berhasil setelah kedua upaya tersebut, membuktikan password tidak berubah.
+- Admin berhasil mereset password user dan mengganti password admin sendiri; pengujian tetap memeriksa pembatalan sesi setelah reset/nonaktif akun.
+- Pengujian memakai database dan akun sementara, terpisah dari akun/password server produksi.
+- Skenario pembatasan password juga dijalankan langsung pada paket Release yang akan dipasang: lulus, 6,2 detik termasuk startup.
+- Paket dipasang pada IIS setelah backup aplikasi dan Data. SHA-256 assembly di server cocok dengan paket Release; halaman Login merespons HTTP 200 dan AllowedHosts tetap "*".
