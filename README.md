@@ -4,6 +4,8 @@ Web arsip hasil scan untuk jaringan kantor. Epson/aplikasi penerima menyimpan fi
 
 Ditujukan untuk Windows Server 2022 dengan IIS. Web dapat dipakai tanpa internet setelah pemasangan dan pengunduhan dependensi selesai.
 
+Konfigurasi pemasangan yang dipilih pemilik: **HTTP melalui IP server**, misalnya `http://192.168.1.10:8080`. IP pada panduan ini adalah contoh; ganti dengan IPv4 LAN server kamu. Tidak membutuhkan DNS atau sertifikat HTTPS.
+
 ## Fitur
 
 - Login akun lokal dengan ASP.NET Core Identity, password di-hash, tanpa registrasi publik.
@@ -65,7 +67,7 @@ Pada **server produksi**:
 - Windows Server 2022 dengan Desktop Experience jika aplikasi Epson berjalan di server yang sama.
 - IIS, Application Initialization, dan ASP.NET Core **.NET 10 Hosting Bundle x64**.
 - Storage lokal NTFS untuk database, arsip, dan key; jangan letakkan database SQLite di network share.
-- Nama DNS internal, sertifikat HTTPS yang dipercaya client, dan akses client ke port HTTPS situs.
+- IPv4 LAN server dan akses client ke port HTTP situs, misalnya 8080.
 - Folder Incoming yang diisi oleh aplikasi penerima scan.
 
 Client hanya memerlukan browser modern, misalnya Edge/Chrome. JavaScript harus aktif. Browser tidak perlu menginstal aplikasi Epson.
@@ -113,7 +115,33 @@ Pasang [.NET 10 Hosting Bundle](https://dotnet.microsoft.com/en-us/download/dotn
 
 Referensi: [hosting ASP.NET Core di IIS](https://learn.microsoft.com/en-us/aspnet/core/host-and-deploy/iis/?view=aspnetcore-10.0).
 
-Ekstrak **isi** publish.zip ke:
+### Pemasangan pertama melalui script
+
+Setelah IIS, Web-AppInit, dan Hosting Bundle tersedia, script berikut dapat membuat situs HTTP baru, folder penyimpanan, aturan firewall untuk jaringan lokal, dan admin awal. Jalankan script dari source repository sebagai administrator. Paket IIS tidak harus berada di folder source.
+
+```powershell
+.\scripts\Install-IIS.ps1 -ServerIP '192.168.1.10' -Port 8080 -PackagePath 'C:\Temp\scan-inbox-iis-win-x64.zip'
+```
+
+Script hanya untuk pemasangan baru: situs/pool/folder yang sudah ada tidak ditimpa. Script membuat backup konfigurasi IIS sebelum perubahan. Prasyarat Hosting Bundle dan Web-AppInit harus sudah terpasang; jangan menjalankan script terhadap data deployment lama untuk melakukan update.
+
+Hasil default:
+
+- URL: `http://192.168.1.10:8080`.
+- Aplikasi: `C:\inetpub\ScanInbox`.
+- Incoming: `C:\ProgramData\ScanInbox\Incoming`.
+- Data privat: `C:\ProgramData\ScanInbox\Data`.
+- Akun admin: `admin`, dengan password acak yang disimpan di `C:\ProgramData\ScanInbox\Setup\admin-first-login.json`.
+
+File kredensial hanya diberi akses administrator dan SYSTEM. Buka file itu di server untuk login pertama, lalu ubah password melalui **Akun saya**. Jangan unggah file tersebut ke GitHub atau membagikannya sebagai dokumen scan.
+
+Binding HTTP menggunakan IP yang diberikan, tanpa hostname. Firewall dibatasi pada LocalSubnet dengan profil Private/Domain. Jika client berada di subnet kantor lain, admin perlu menambahkan jaringan client yang memang diizinkan. Script tidak mengubah situs IIS lain.
+
+Jika memilih script, lanjut ke bagian **Sambungkan folder hasil scan** setelah memastikan situs aktif. Bagian manual berikut dipakai bila tidak menjalankan script.
+
+### Pemasangan manual
+
+Ekstrak **isi** paket IIS ke:
 
 ```text
 C:\inetpub\ScanInbox\ScanInbox.dll
@@ -129,13 +157,13 @@ Di IIS Manager:
 2. .NET CLR Version: **No Managed Code**; pipeline **Integrated**.
 3. Advanced Settings: **Enable 32-Bit Applications = False**, **Start Mode = AlwaysRunning**, **Idle Time-out (minutes) = 0**.
 4. Buat situs IIS bernama **ScanInbox**, Application Pool **ScanInbox**, Physical Path **C:\inetpub\ScanInbox**.
-5. Gunakan binding **HTTPS**, misalnya port **443**, hostname **scan.kantor.test**, dan sertifikat yang sesuai.
+5. Gunakan binding **HTTP**, IP address IPv4 LAN server, port **8080**, dan **Host name dikosongkan**. Pastikan port belum digunakan situs lain.
 6. Pada situs, aktifkan **Preload Enabled = True**. Application Initialization harus sudah terpasang. Jangan matikan Anonymous Authentication IIS; login ditangani aplikasi, bukan Windows Authentication.
-7. Pastikan DNS internal/hosts client mengarah ke IP server dan sertifikat HTTPS dipercaya client.
+7. Izinkan TCP 8080 dari jaringan client kantor pada Windows Firewall, lalu akses `http://IP-SERVER:8080` dari browser client.
 
 AlwaysRunning dan preload membantu importer tetap berjalan. Setelah reboot/recycle, cek status impor di halaman dokumen. Startup pertama bisa membutuhkan waktu lebih lama.
 
-Hostname `scan.kantor.test` adalah **contoh**, ganti sesuai jaringan kamu. Bila memakai IP langsung, isi IP tersebut pada AllowedHosts dan gunakan sertifikat dengan IP SAN yang sesuai. Jangan membuka situs ke internet hanya untuk akses kantor.
+Isi IP server pada AllowedHosts dan set Security:RequireHttps ke false agar cookie login mengikuti HTTP dan aplikasi tidak mengarahkan ke HTTPS. Port 8080 dipakai agar instalasi dapat berdampingan dengan Default Web Site di port 80. Jangan membuka situs ke internet hanya untuk akses kantor.
 
 ## 3. Buat folder dan konfigurasi
 
@@ -161,7 +189,7 @@ Isi konfigurasi lokal:
 
 ```json
 {
-  "AllowedHosts": "scan.kantor.test;localhost;127.0.0.1",
+  "AllowedHosts": "192.168.1.10;localhost;127.0.0.1",
   "Storage": {
     "InboxPath": "C:\\ProgramData\\ScanInbox\\Incoming",
     "DataPath": "C:\\ProgramData\\ScanInbox\\Data",
@@ -169,7 +197,7 @@ Isi konfigurasi lokal:
     "MinimumAgeSeconds": 10,
     "MaximumFileMegabytes": 100
   },
-  "Security": { "RequireHttps": true }
+  "Security": { "RequireHttps": false }
 }
 ```
 
@@ -181,7 +209,7 @@ Isi konfigurasi lokal:
 | PollSeconds | Interval pemeriksaan folder, 2 sampai 300 detik |
 | MinimumAgeSeconds | Umur minimum file sejak perubahan terakhir, 2 sampai 3600 detik |
 | MaximumFileMegabytes | Batas setiap file, 1 sampai 1024 MiB; default 100 |
-| Security:RequireHttps | True untuk produksi; false hanya untuk uji loopback lokal |
+| Security:RequireHttps | False untuk pemasangan HTTP yang dipilih; true mengaktifkan HTTPS redirect dan cookie Secure |
 
 Path relatif dihitung dari folder aplikasi, bukan dari browser. Perubahan konfigurasi membutuhkan restart/recycle Application Pool. Environment variable seperti `Storage__InboxPath` dapat mengganti nilai JSON; periksa bila lokasi aktual tidak sesuai.
 
@@ -220,7 +248,7 @@ dotnet .\ScanInbox.dll --create-admin admin
 
 Masukkan password minimal 12 karakter dua kali. Password tidak ditampilkan dan tidak ditaruh di command line atau konfigurasi. Tidak ada username/password bawaan. Akun disimpan ke DataPath dari appsettings.Local.json; selalu jalankan perintah dari folder aplikasi agar memakai konfigurasi yang benar.
 
-Mulai/recycle situs, buka alamat HTTPS server, lalu login dengan admin tersebut.
+Mulai/recycle situs, buka alamat HTTP server, lalu login dengan admin tersebut. Jika menggunakan script Install-IIS.ps1, admin pertama sudah dibuat dan kredensialnya ada pada file Setup di atas; tidak perlu menjalankan --create-admin lagi.
 
 ## 6. Sambungkan folder hasil scan
 
@@ -238,7 +266,7 @@ Saat menyalin file manual/otomatis dari komputer lain, salin ke nama berakhiran 
 
 ### Mengambil dokumen
 
-1. Buka alamat web lokal yang diberikan admin, misalnya `https://scan.kantor.test`.
+1. Buka alamat web lokal yang diberikan admin, misalnya `http://192.168.1.10:8080`.
 2. Login. Semua dokumen bersama bisa dilihat oleh semua pengguna aktif.
 3. Cari melalui nama file atau pilih jenis dokumen.
 4. Klik thumbnail untuk membuka preview.
@@ -304,21 +332,16 @@ Versi pertama memakai EnsureCreated untuk membuat database awal, bukan sistem mi
 | Peringatan folder belum tersedia | Path konfigurasi dan izin baca akun Application Pool; aplikasi sengaja tidak membuat InboxPath otomatis |
 | Ada file belum dapat diarsipkan | File kosong/terlalu besar/header tidak cocok/izin ditolak; lihat log server |
 | Preview gagal, download tersedia | File mungkin rusak, terenkripsi, format gambar tidak didukung browser, atau resource PDF gagal; coba file contoh yang valid/scan ulang |
-| Login kembali terus | Akses melalui HTTPS yang benar, izin folder Data/keys, dan nama host; cookie produksi memerlukan HTTPS |
+| Login kembali terus | Pada situs HTTP, pastikan Security:RequireHttps=false; periksa juga izin Data/keys serta IP pada AllowedHosts |
 | HTTP 400 | Host tidak tercantum di AllowedHosts atau form kehilangan token antiforgery; muat ulang halaman lalu coba lagi |
 | HTTP 429 | Batas login per IP tercapai; tunggu satu menit |
 | HTTP 500.30/500.31 | Hosting Bundle/runtime .NET 10 x64, web.config hasil publish, dan event log Application |
+| Client tidak bisa membuka IP:port | Binding IIS, port firewall, profil jaringan, IP yang benar, dan apakah client termasuk subnet yang diizinkan |
 | Tidak ada aset PDF.js | Build harus menjalankan npm ci dan npm run assets sebelum dotnet publish |
 | Scan berhenti setelah logout Windows | Jalur Epson mungkin menggunakan aplikasi desktop yang membutuhkan sesi aktif; cek perilaku penerima scan secara terpisah |
 | Tidak ada scan baru setelah IIS idle/reboot | AlwaysRunning, preload, Web-AppInit, idle timeout, status situs, serta status impor di web |
 
 Untuk diagnostik sementara, hentikan Application Pool lalu jalankan dari folder situs:
-
-```powershell
-dotnet .\ScanInbox.dll --urls https://localhost:5443
-```
-
-Ini membutuhkan sertifikat default Kestrel yang dikonfigurasi. Untuk memeriksa startup tanpa sertifikat, gunakan **hanya loopback lokal**:
 
 ```powershell
 $env:Security__RequireHttps = 'false'
@@ -345,7 +368,7 @@ New-Item -ItemType Directory -Path .\runtime\inbox -Force
 dotnet run --launch-profile Local
 ```
 
-Buka `http://127.0.0.1:5080`. Profile Local menonaktifkan keharusan HTTPS hanya untuk pengujian loopback. Masukkan contoh PDF ke `runtime\inbox`. Folder runtime diabaikan Git. Pengaturan produksi tetap RequireHttps true.
+Buka `http://127.0.0.1:5080`. Masukkan contoh PDF ke `runtime\inbox`. Folder runtime diabaikan Git. Default proyek dan konfigurasi pemasangan memakai RequireHttps false sesuai pilihan HTTP.
 
 ## Pengujian otomatis
 

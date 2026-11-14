@@ -145,8 +145,28 @@ Craftsmanship C-1 sampai C-5 PASS: alasan visual tercatat, kontrol bekerja, isi 
 ## Belum diverifikasi
 
 - Scan dari panel Epson L6260 ke Windows Server 2022, termasuk kondisi desktop terkunci/logout/reboot.
-- Konfigurasi IIS, HTTPS, sertifikat, DNS, izin folder dan firewall di deployment kantor.
+- Akses dari komputer client lain serta scan printer fisik; pengujian IIS di bawah dilakukan dari browser yang berjalan pada server.
 - Browser Safari/Firefox, screen reader, keyboard virtual HP fisik, dan volume dokumen besar.
 - PDF terenkripsi, semua variasi encoding/codec scanner, dan beban beberapa pengguna bersamaan.
 
-Web diuji melalui Kestrel loopback pada Windows Server 2022 dengan penyimpanan sementara dan dokumen contoh. Pengujian ini tidak menyatakan integrasi printer atau deployment IIS kantor sudah selesai.
+Pengujian otomatis awal memakai Kestrel loopback pada Windows Server 2022 dengan penyimpanan sementara dan dokumen contoh. Deployment IIS HTTP kemudian diverifikasi secara terpisah seperti di bawah. Integrasi printer masih membutuhkan pengujian fisik.
+
+## Deployment IIS HTTP melalui IPv4
+
+Konfigurasi diminta pemilik: HTTP melalui IP, tanpa DNS/HTTPS. Alamat deployment aktual dan kredensial admin disimpan secara lokal pada server, tidak dimasukkan ke repository publik.
+
+- .NET 10 Hosting Bundle 10.0.15 dipasang setelah checksum SHA-512 cocok dengan metadata Microsoft dan Authenticode berstatus Valid dari Microsoft Corporation; installer exit 0.
+- IIS Application Initialization berhasil dipasang tanpa memerlukan reboot.
+- Script `scripts/Install-IIS.ps1` lulus parser PowerShell dan dijalankan untuk pemasangan pertama.
+- Situs IIS dan Application Pool khusus ScanInbox aktif, binding IPv4 HTTP port 8080, tanpa hostname.
+- RequireHttps=false pada konfigurasi deployment; browser tidak diarahkan ke HTTPS.
+- Folder Incoming, Data, dan Setup terpisah; Data hanya memberi akses pada SYSTEM, administrator, dan Application Pool; Setup hanya pada SYSTEM/administrator.
+- Admin awal dibuat dengan password acak; kredensial tidak dikirim ke stdout, source, atau repository.
+- Firewall TCP 8080 dibatasi untuk LocalSubnet pada profil Private/Domain.
+- Default Web Site di port 80 tetap aktif dan bindingnya dipertahankan.
+- `tools/verify-iis.mjs` dijalankan terhadap URL IPv4 IIS aktual: login PASS, katalog bersama PASS, importer ready, aset lokal PASS, halaman admin PASS, logout PASS, 0 uncaught JavaScript error.
+- API dokumen mengembalikan 401 sebelum login dan sesudah logout, serta 200 saat login.
+- Cookie sesi pada HTTP: HttpOnly=true, Secure=false, sesuai konfigurasi HTTP yang diminta.
+- Arsip deployment masih kosong pada saat verifikasi; tidak ada dokumen kantor/contoh pengujian yang dimasukkan ke arsip produksi.
+
+Script verifikasi membaca kredensial dari file privat yang diberikan sebagai argumen, bukan dari source atau command line password. Verifikasi ini tidak membuktikan jalur firewall dari setiap VLAN kantor, perilaku setelah reboot server, atau penerimaan scan dari panel printer.
