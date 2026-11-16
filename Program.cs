@@ -1,4 +1,6 @@
 using System.Threading.RateLimiting;
+using System.Security.Claims;
+using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
@@ -67,12 +69,23 @@ builder.Services.AddRateLimiter(options => {
         _ => new FixedWindowRateLimiterOptions { PermitLimit = 30, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
 });
 builder.Services.AddSingleton<ImportStatus>();
+builder.Services.AddScoped<DocumentDeletion>();
 builder.Services.AddHostedService<ScanImporter>();
 
 var app = builder.Build();
 using (var scope = app.Services.CreateScope()) {
     var db = scope.ServiceProvider.GetRequiredService<InboxDb>();
     await db.Database.EnsureCreatedAsync();
+    await db.Database.ExecuteSqlRawAsync("""
+        CREATE TABLE IF NOT EXISTS "DeletedDocuments" (
+            "DocumentId" TEXT NOT NULL CONSTRAINT "PK_DeletedDocuments" PRIMARY KEY,
+            "DeletedUtc" TEXT NOT NULL,
+            "DeletedBy" TEXT NOT NULL,
+            "FileRemoved" INTEGER NOT NULL,
+            CONSTRAINT "FK_DeletedDocuments_Documents_DocumentId"
+                FOREIGN KEY ("DocumentId") REFERENCES "Documents" ("Id") ON DELETE CASCADE
+        );
+        """);
     await db.Database.ExecuteSqlRawAsync("PRAGMA journal_mode=WAL;");
     var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
     if (!await roleManager.RoleExistsAsync("Admin"))
@@ -105,7 +118,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapRazorPages();
 app.MapGet("/api/documents", async (InboxDb db, ImportStatus status, string? search, string? type, int? page, CancellationToken ct) => {
-    var query = db.Documents.AsNoTracking();
+    var query = db.Documents.AsNoTracking().Where(d => !db.DeletedDocuments.Any(x => x.DocumentId == d.Id));
     search = search?.Trim();
     if (search?.Length > 160) return Results.BadRequest();
     if (!string.IsNullOrEmpty(search)) query = query.Where(d => d.Name.Contains(search));
@@ -122,15 +135,24 @@ app.MapGet("/api/documents", async (InboxDb db, ImportStatus status, string? sea
     return Results.Ok(new { documents = docs, total, page = current, pages, import = status.Snapshot() });
 }).RequireAuthorization();
 app.MapGet("/documents/{id:guid}/content", async (Guid id, bool? download, InboxDb db, CancellationToken ct) => {
-    var doc = await db.Documents.AsNoTracking().SingleOrDefaultAsync(d => d.Id == id, ct);
+    var doc = await db.Documents.AsNoTracking()
+        .SingleOrDefaultAsync(d => d.Id == id && !db.DeletedDocuments.Any(x => x.DocumentId == d.Id), ct);
     if (doc is null) return Results.NotFound();
     var path = Path.Combine(storage.ArchivePath, doc.StoredName);
     try {
-        var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+        var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete);
         return Results.File(stream, doc.ContentType, download == true ? doc.Name : null, enableRangeProcessing: true);
     } catch (FileNotFoundException) { return Results.NotFound(); }
       catch (DirectoryNotFoundException) { return Results.NotFound(); }
 }).RequireAuthorization();
+app.MapPost("/api/documents/{id:guid}/delete", async (Guid id, HttpContext context,
+    IAntiforgery antiforgery, DocumentDeletion deletion, CancellationToken ct) => {
+    try { await antiforgery.ValidateRequestAsync(context); }
+    catch (AntiforgeryValidationException) { return Results.BadRequest(); }
+    var userId = context.User.FindFirstValue(ClaimTypes.NameIdentifier);
+    if (userId is null) return Results.Unauthorized();
+    return await deletion.DeleteAsync(id, userId, ct) ? Results.NoContent() : Results.NotFound();
+}).RequireAuthorization(policy => policy.RequireRole("Admin"));
 app.Run();
 
 public partial class Program { }

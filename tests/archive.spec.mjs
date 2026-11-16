@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import { writeFile, readFile, utimes, mkdir, rename, open, unlink } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { createHash } from 'node:crypto';
+import { DatabaseSync } from 'node:sqlite';
 import { samplePdf, samplePng } from './fixtures.mjs';
 
 test.describe.configure({ mode: 'serial' });
@@ -230,4 +231,83 @@ test('missing inbox warning is visible while archived documents remain available
         await expect(page.locator('#import-warning')).toContainText('Folder masuk belum tersedia');
         expect((await list(page)).total).toBe(27);
     } finally { await rename(destination, source); }
+});
+
+test('only admins delete scans with confirmation and CSRF; originals stay and deleted scans do not return', async ({ page, browser, request }) => {
+    await login(page);
+    const name = 'contoh-hapus-admin.pdf';
+    const source = await put(name, samplePdf());
+    await expect.poll(async () => (await list(page)).documents.some(d => d.name === name)).toBe(true);
+    const doc = (await list(page)).documents.find(d => d.name === name);
+    const endpoint = `/api/documents/${doc.id}/delete`;
+    expect((await request.post(endpoint)).status()).toBe(401);
+    expect((await page.request.post(endpoint)).status()).toBe(400);
+
+    await page.goto('/Admin');
+    await page.locator('#new-name').fill('deleteclient');
+    const password = process.env.INBOX_TEST_PASSWORD + 'delete';
+    await page.locator('#new-password').fill(password);
+    await page.getByRole('button', { name: 'Buat akun', exact: true }).click();
+    await expect(page.getByRole('status')).toContainText('Akun berhasil dibuat');
+    const context = await browser.newContext();
+    const client = await context.newPage();
+    await login(client, 'deleteclient', password);
+    await client.getByLabel('Cari nama dokumen').fill(name);
+    await client.getByRole('button', { name: 'Cari dokumen', exact: true }).click();
+    await client.getByRole('button', { name: `Preview ${name}`, exact: true }).click();
+    await expect(client.getByRole('button', { name: 'Hapus dokumen', exact: true })).toHaveCount(0);
+    const clientToken = await client.locator('input[name="__RequestVerificationToken"]').first().inputValue();
+    expect((await client.request.post(endpoint, { form: { __RequestVerificationToken: clientToken } })).status()).toBe(403);
+    expect((await client.request.get(`/documents/${doc.id}/content`)).status()).toBe(200);
+
+    await page.goto('/');
+    await page.getByLabel('Cari nama dokumen').fill(name);
+    await page.getByRole('button', { name: 'Cari dokumen', exact: true }).click();
+    await page.getByRole('button', { name: `Preview ${name}`, exact: true }).click();
+    await expect(page.locator('#preview-status')).toHaveText('Halaman 1 dari 2');
+    await page.getByRole('button', { name: 'Hapus dokumen', exact: true }).click();
+    await expect(page.locator('#delete-document-form')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Batal', exact: true })).toBeFocused();
+    await page.getByRole('button', { name: 'Batal', exact: true }).click();
+    await expect(page.locator('#delete-document-form')).not.toBeVisible();
+    expect((await page.request.get(`/documents/${doc.id}/content`)).status()).toBe(200);
+    await page.getByRole('button', { name: 'Hapus dokumen', exact: true }).click();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#delete-document-form')).not.toBeVisible();
+    await expect(page.locator('#preview-dialog')).toBeVisible();
+    await page.getByRole('button', { name: 'Hapus dokumen', exact: true }).click();
+    await page.route(`**${endpoint}`, route => route.fulfill({ status: 503, body: 'temporary' }));
+    await page.getByRole('button', { name: 'Ya, hapus dokumen', exact: true }).click();
+    await expect(page.locator('#delete-error')).toContainText('belum dapat dihapus');
+    await expect(page.getByRole('button', { name: 'Ya, hapus dokumen', exact: true })).toBeEnabled();
+    await page.unroute(`**${endpoint}`);
+    await page.setViewportSize({ width: 360, height: 800 });
+    expect(await page.locator('#preview-dialog').evaluate(d => d.scrollWidth <= d.clientWidth)).toBe(true);
+    await page.screenshot({ path: 'test-results/delete-confirmation-mobile.png' });
+    const adminToken = await page.locator('#delete-document-form input[name="__RequestVerificationToken"]').inputValue();
+    await page.getByRole('button', { name: 'Ya, hapus dokumen', exact: true }).click();
+    await expect(page.locator('#preview-dialog')).not.toBeVisible();
+    await expect(page.locator('#message')).toContainText('berhasil dihapus');
+    expect((await page.request.get(`/documents/${doc.id}/content`)).status()).toBe(404);
+    expect((await client.request.get(`/documents/${doc.id}/content?download=true`)).status()).toBe(404);
+    await client.getByRole('button', { name: 'Tutup', exact: true }).click();
+    await client.getByRole('button', { name: 'Perbarui', exact: true }).click();
+    await expect(client.getByRole('button', { name: `Preview ${name}`, exact: true })).toHaveCount(0);
+    expect(await readFile(source)).toEqual(samplePdf());
+
+    const database = new DatabaseSync(resolve(process.env.INBOX_TEST_RUNTIME, 'data/scan-inbox.db'), { readOnly: true });
+    try {
+        const archived = database.prepare('SELECT StoredName FROM Documents WHERE Id = ?').get(doc.id.toUpperCase());
+        const marker = database.prepare('SELECT DeletedBy, FileRemoved FROM DeletedDocuments WHERE DocumentId = ?').get(doc.id.toUpperCase());
+        expect(marker.DeletedBy).toBeTruthy();
+        expect(marker.FileRemoved).toBe(1);
+        await expect(readFile(resolve(process.env.INBOX_TEST_RUNTIME, 'data/documents', archived.StoredName))).rejects.toThrow(/ENOENT/);
+    } finally { database.close(); }
+    expect((await page.request.post(endpoint, { form: { __RequestVerificationToken: adminToken } })).status()).toBe(204);
+    await put(name, samplePdf());
+    await page.waitForTimeout(6500);
+    expect((await list(page)).documents.some(d => d.name === name)).toBe(false);
+    await put(name, Buffer.concat([samplePdf(), Buffer.from('\n% A new scan with changed content\n')]));
+    await expect.poll(async () => (await list(page)).documents.some(d => d.name === name)).toBe(true);
+    await context.close();
 });

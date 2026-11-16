@@ -21,11 +21,22 @@ public sealed class ScanDocument {
     public DateTime ImportedUtc { get; set; }
 }
 
+public sealed class DeletedScanDocument {
+    public Guid DocumentId { get; set; }
+    public DateTime DeletedUtc { get; set; }
+    public required string DeletedBy { get; set; }
+    public bool FileRemoved { get; set; }
+}
+
 public sealed class InboxDb(DbContextOptions<InboxDb> options) : IdentityDbContext<AppUser>(options) {
     public DbSet<ScanDocument> Documents => Set<ScanDocument>();
+    public DbSet<DeletedScanDocument> DeletedDocuments => Set<DeletedScanDocument>();
     protected override void OnModelCreating(ModelBuilder model) {
         base.OnModelCreating(model);
         model.Entity<ScanDocument>().HasIndex(d => new { d.SourceKey, d.Sha256 }).IsUnique();
         model.Entity<ScanDocument>().HasIndex(d => d.ImportedUtc);
+        model.Entity<DeletedScanDocument>().HasKey(d => d.DocumentId);
+        model.Entity<DeletedScanDocument>().HasOne<ScanDocument>().WithOne()
+            .HasForeignKey<DeletedScanDocument>(d => d.DocumentId);
     }
 }

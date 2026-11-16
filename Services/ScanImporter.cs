@@ -26,6 +26,9 @@ public sealed class ScanImporter(StorageOptions storage, IServiceScopeFactory sc
     }
 
     private async Task ScanOnce(CancellationToken ct) {
+        using (var cleanupScope = scopes.CreateScope()) {
+            await cleanupScope.ServiceProvider.GetRequiredService<DocumentDeletion>().PurgeAsync(ct);
+        }
         if (!Directory.Exists(storage.InboxPath)) {
             status.Update("missing");
             return;

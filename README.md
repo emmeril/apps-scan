@@ -11,6 +11,7 @@ Konfigurasi pemasangan yang dipilih pemilik: **HTTP melalui IP server**, misalny
 - Login akun lokal dengan ASP.NET Core Identity, password di-hash, tanpa registrasi publik.
 - Admin membuat pengguna/admin lain, mereset password, serta mengaktifkan/menonaktifkan akun.
 - Perubahan password hanya oleh admin; pengguna biasa dapat login dan logout.
+- Hapus dokumen dari preview khusus admin, dengan konfirmasi dan pemeriksaan izin pada server.
 - Galeri thumbnail PDF/JPEG/PNG, pencarian nama, filter PDF/gambar, dan pagination 24 dokumen.
 - Preview PDF per halaman, zoom/pas lebar, preview gambar, dan download file arsip.
 - Pembaruan galeri setiap 10 detik saat tab aktif.
@@ -19,7 +20,7 @@ Konfigurasi pemasangan yang dipilih pemilik: **HTTP melalui IP server**, misalny
 - Galeri dan endpoint file memerlukan login, termasuk permintaan rentang byte PDF.
 - Semua aset PDF.js/font/WASM disajikan secara lokal, tanpa CDN.
 
-Tidak ada fitur hapus dokumen dari web pada versi ini.
+Dokumen yang dihapus tidak dapat lagi diakses melalui web. File sumber di Documents/Incoming tetap disimpan; penanda penghapusan mencegah file dengan nama dan isi yang sama diimpor kembali.
 
 <details>
 <summary>Contoh tampilan</summary>
@@ -307,6 +308,18 @@ Disable-ScheduledTask -TaskName 'ScanInbox-EpsonPdfForwarder'
 Penerusan berjalan tanpa login desktop, tetapi **penerimaan scan oleh aplikasi Epson tetap membutuhkan sesi desktop akun penerima**. Uji kembali setelah restart dan login; menjalankan task penerusan sebagai SYSTEM tidak mengubah aplikasi Epson menjadi service.
 
 ## Penggunaan sehari-hari
+
+### Menghapus hasil scan (admin)
+
+1. Login sebagai admin, lalu buka preview dokumen yang ingin dihapus.
+2. Klik **Hapus dokumen**. Periksa nama file pada konfirmasi.
+3. Klik **Ya, hapus dokumen** untuk menghapusnya, atau **Batal** untuk kembali. Escape membatalkan konfirmasi sebelum menutup preview.
+
+Penghapusan berlaku untuk seluruh pengguna. User biasa tidak mendapat tombol hapus, dan permintaan hapus langsung ke server juga ditolak. Permintaan admin wajib menyertakan token antiforgery.
+
+File arsip di Data/documents dibersihkan setelah penanda penghapusan tersimpan. Jika file masih terkunci, pembersihan dicoba lagi oleh worker. Preview/download baru langsung ditolak; download yang sudah berjalan dapat menyelesaikan transfernya. File sumber di Documents/Incoming tetap ada. Tidak ada fitur undo pada web.
+
+Metadata dokumen serta penanda waktu dan ID admin yang menghapus tetap berada di database untuk mencegah impor ulang. Memindai ulang dengan nama yang sama tetapi isi berbeda tetap menghasilkan dokumen baru. Jangan menghapus metadata tersebut secara manual. Saat memperbarui instalasi lama, aplikasi menambahkan tabel `DeletedDocuments` secara otomatis tanpa mengganti akun atau dokumen yang sudah ada.
 
 ### Mengambil dokumen
 

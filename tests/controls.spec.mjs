@@ -3,7 +3,12 @@ import { writeFile, utimes } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { samplePdf } from './fixtures.mjs';
 
-test('remaining account controls, validation, keyboard navigation and long filenames', async ({ page }) => {
+test('remaining account controls, validation, keyboard navigation and long filenames', async ({ page, request }) => {
+    test.setTimeout(90000);
+    // Other account scenarios can consume the shared application's login limit.
+    await expect.poll(async () => (await request.get('/Login')).status(), {
+        timeout: 65000, intervals: [1000]
+    }).toBe(200);
     const errors = [];
     page.on('pageerror', error => errors.push(error.message));
     await page.goto('/Login');

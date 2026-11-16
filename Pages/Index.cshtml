@@ -36,7 +36,23 @@
         </div>
         <div class="field zoom-field"><label for="zoom">Ukuran preview</label><select id="zoom"><option value="fit">Pas lebar</option><option value="1">100%</option><option value="1.5">150%</option><option value="2">200%</option></select></div>
         <a id="download" class="button primary" download>Download dokumen</a>
+        @if (User.IsInRole("Admin")) {
+            <button id="delete-document" class="secondary danger" type="button">Hapus dokumen</button>
+        }
     </div>
+    @if (User.IsInRole("Admin")) {
+        <form id="delete-document-form" class="delete-confirmation" method="post" hidden aria-labelledby="delete-heading">
+            @Html.AntiForgeryToken()
+            <h3 id="delete-heading">Hapus dokumen ini?</h3>
+            <p id="delete-name" class="delete-name"></p>
+            <p>Dokumen akan dihapus dari arsip bersama dan tidak bisa lagi diambil oleh pengguna lain. File sumber di folder scan tetap disimpan.</p>
+            <p id="delete-error" class="validation" role="alert" hidden></p>
+            <div class="delete-actions">
+                <button id="cancel-delete" class="secondary" type="button">Batal</button>
+                <button id="confirm-delete" class="danger-primary" type="submit">Ya, hapus dokumen</button>
+            </div>
+        </form>
+    }
     <p id="preview-status" class="preview-status" role="status">Memuat preview…</p>
     <div id="preview-stage" class="preview-stage"><canvas id="pdf-canvas" aria-label="Halaman dokumen PDF"></canvas><img id="image-preview" alt="" width="1000" height="1414" hidden /></div>
     <p class="preview-note">Preview membantu mengenali isi. File download menggunakan dokumen asli yang diarsipkan.</p>

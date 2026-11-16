@@ -212,3 +212,20 @@ Pengujian di lokasi, 16 November 2026, pada Windows Server 2022 dengan sesi desk
 - Lock/logout/reboot dan preview dokumen fisik melalui browser client belum diuji.
 
 Source publik hanya berisi script dan panduan umum; dokumen hasil scan, kredensial, konfigurasi aktual akun Windows, serta alamat jaringan kantor tidak dimasukkan ke repository.
+
+## Hapus dokumen khusus admin
+
+- Tombol Hapus dokumen dan konfirmasi hanya dirender untuk admin, di dalam preview. Batal dan Escape membatalkan konfirmasi tanpa menghapus; fokus awal berada pada Batal.
+- Endpoint POST mewajibkan role Admin serta token antiforgery. Anonymous mendapat 401, user biasa dengan token valid mendapat 403, dan admin tanpa token mendapat 400.
+- Setelah admin mengonfirmasi, dokumen hilang dari katalog bersama dan endpoint preview/download mengembalikan 404, termasuk bagi user lain yang sebelumnya sudah membukanya.
+- Pengujian memeriksa bahwa file arsip benar-benar hilang, file sumber tetap utuh, dan penanda waktu/ID admin tersimpan. Mengirim permintaan yang sama kembali menghasilkan 204.
+- Menulis kembali file sumber dengan nama dan isi sama tidak membuat dokumen muncul lagi. Nama sama dengan isi berbeda diimpor sebagai hasil scan baru.
+- Tabel DeletedDocuments ditambahkan otomatis. Setup pengujian menghapus tabel baru setelah bootstrap untuk meniru skema instalasi lama, lalu memverifikasi aplikasi dapat membuatnya kembali saat startup.
+- Konfirmasi juga diuji pada lebar 360 piksel, termasuk kondisi kegagalan sementara dan tombol coba lagi. Screenshot memakai dokumen contoh; diperiksa tidak ada overflow horizontal.
+- Build Release lulus dengan 0 warning/error; seluruh 8 skenario browser/integrasi lulus. Skenario hapus dijalankan lagi pada paket publish win-x64 yang dipasang ke IIS: lulus, 19,7 detik termasuk startup.
+- Pemeriksaan kontras seluruh 16 pasangan lulus, termasuk warna tombol hapus dan hover.
+- Aplikasi dan Data dibackup sebelum pemasangan. Assembly IIS cocok dengan paket Release, konfigurasi lokal identik, dan tabel baru berhasil dibuat pada database server yang sudah ada.
+- Setelah deployment, metadata serta hash seluruh file arsip lama cocok dengan sebelum pembaruan; akun, hash password, security stamp, dan status aktif tidak berubah. Tidak ada hasil scan kantor yang dihapus untuk pengujian.
+- Origin IIS memberikan HTTP 200 pada Login dan Host header alternatif, serta 401 untuk katalog dan endpoint hapus tanpa login. Pengujian admin/user terautentikasi menggunakan data terpisah pada paket Release, tanpa mereset password produksi.
+
+Penanda penghapusan disimpan sebelum pembersihan file. Jika file terkunci, akses web sudah ditutup dan worker akan mengulang pembersihan; metadata dan file sumber tidak dibersihkan oleh tindakan hapus pada web.

@@ -3,6 +3,7 @@ import { mkdir } from 'node:fs/promises';
 import { spawn, spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
+import { DatabaseSync } from 'node:sqlite';
 
 export default async function setup() {
     const root = resolve('.');
@@ -25,6 +26,10 @@ export default async function setup() {
     const dotnet = process.env.DOTNET_EXE || 'dotnet';
     const bootstrap = spawnSync(dotnet, [dll, '--create-admin', 'testadmin'], { cwd: appRoot, env, input: `${password}\n${password}\n`, encoding: 'utf8', windowsHide: true });
     if (bootstrap.status !== 0) throw new Error(`Pembuatan akun pengujian gagal: ${bootstrap.stderr || bootstrap.error}`);
+    // Reproduce the existing installation's schema before the deletion feature.
+    const legacyDatabase = new DatabaseSync(resolve(runtime, 'data/scan-inbox.db'));
+    try { legacyDatabase.exec('DROP TABLE DeletedDocuments'); }
+    finally { legacyDatabase.close(); }
     const server = spawn(dotnet, [dll], { cwd: appRoot, env, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
     let output = '';
     server.stdout.on('data', data => { output += data.toString(); });

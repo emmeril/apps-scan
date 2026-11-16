@@ -21,6 +21,8 @@ let renderTask;
 let pdfPage = 1;
 let selected;
 let resizing;
+let deleting = false;
+const deleteForm = $('delete-document-form');
 
 const fileUrl = (id, download = false) => new URL(`documents/${encodeURIComponent(id)}/content${download ? '?download=true' : ''}`, appBase).href;
 const formatBytes = bytes => bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
@@ -188,6 +190,11 @@ async function clearPdf() {
 async function openPreview(doc) {
     const generation = ++previewGeneration;
     selected = doc;
+    if (deleteForm) {
+        deleteForm.hidden = true;
+        $('delete-error').hidden = true;
+        $('delete-document').disabled = deleting;
+    }
     pdfPage = 1;
     $('preview-name').textContent = doc.name;
     $('preview-meta').textContent = `${formatBytes(doc.bytes)} · Masuk ${formatDate(doc.importedUtc)} · File sumber diubah ${formatDate(doc.sourceModifiedUtc)}`;
@@ -286,6 +293,60 @@ $('refresh').addEventListener('click', () => void loadDocuments());
 $('previous').addEventListener('click', () => { if (currentPage > 1) { currentPage--; void loadDocuments(); } });
 $('next').addEventListener('click', () => { if (currentPage < currentPages) { currentPage++; void loadDocuments(); } });
 $('close-preview').addEventListener('click', () => dialog.close());
+if (deleteForm) {
+    const cancelDelete = () => {
+        if (deleting) return;
+        deleteForm.hidden = true;
+        $('delete-document').focus();
+    };
+    $('delete-document').addEventListener('click', () => {
+        if (!selected || deleting) return;
+        $('delete-name').textContent = selected.name;
+        $('delete-error').hidden = true;
+        deleteForm.hidden = false;
+        $('cancel-delete').focus();
+    });
+    $('cancel-delete').addEventListener('click', cancelDelete);
+    dialog.addEventListener('cancel', event => {
+        if (!deleteForm.hidden) {
+            event.preventDefault();
+            cancelDelete();
+        }
+    });
+    deleteForm.addEventListener('submit', async event => {
+        event.preventDefault();
+        if (!selected || deleting) return;
+        const doc = selected;
+        deleting = true;
+        for (const id of ['delete-document', 'cancel-delete', 'confirm-delete']) $(id).disabled = true;
+        $('confirm-delete').textContent = 'Menghapus…';
+        $('delete-error').hidden = true;
+        try {
+            const response = await fetch(new URL(`api/documents/${encodeURIComponent(doc.id)}/delete`, appBase), {
+                method: 'POST', body: new FormData(deleteForm)
+            });
+            if (response.status === 401) {
+                location.assign(new URL('Login', appBase));
+                return;
+            }
+            if (!response.ok && response.status !== 404) throw new Error(response.status === 403
+                ? 'Hanya admin yang boleh menghapus dokumen.'
+                : 'Dokumen belum dapat dihapus. Coba lagi atau muat ulang halaman.');
+            if (selected?.id === doc.id) dialog.close();
+            listSignature = '';
+            await loadDocuments();
+            message('Dokumen berhasil dihapus dari arsip bersama.');
+            $('refresh').focus();
+        } catch (error) {
+            $('delete-error').textContent = error.message || 'Koneksi terputus. Coba hapus kembali.';
+            $('delete-error').hidden = false;
+        } finally {
+            deleting = false;
+            for (const id of ['delete-document', 'cancel-delete', 'confirm-delete']) $(id).disabled = false;
+            $('confirm-delete').textContent = 'Ya, hapus dokumen';
+        }
+    });
+}
 dialog.addEventListener('close', () => { previewGeneration++; selected = undefined; void clearPdf(); $('zoom').disabled = false; });
 $('previous-page').addEventListener('click', () => { if (previewPdf && pdfPage > 1) { pdfPage--; void renderPage(); } });
 $('next-page').addEventListener('click', () => { if (previewPdf && pdfPage < previewPdf.numPages) { pdfPage++; void renderPage(); } });

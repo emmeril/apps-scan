@@ -13,6 +13,8 @@ const pairs = [
     ['white/green-hover', '#ffffff', '#103d2e', 4.5],
     ['error/white', '#872d24', '#ffffff', 4.5],
     ['error/paper', '#872d24', '#f5f3ed', 4.5],
+    ['error/delete-hover', '#872d24', '#fff0ed', 4.5],
+    ['white/delete-hover', '#ffffff', '#67221b', 4.5],
     ['warning-text/warning', '#573a0d', '#fff4dc', 4.5],
     ['edge/white', '#78867c', '#ffffff', 3],
     ['edge/paper', '#78867c', '#f5f3ed', 3],

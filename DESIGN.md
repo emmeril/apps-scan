@@ -16,3 +16,8 @@ Reading this as: a shared scan archive for office staff, in a paper archive visu
 - No decorative icons, illustrations, avatars, statistics, animations, external fonts, or background patterns.
 - Hover/focus feedback only. Automatic refresh updates content without moving focus or closing the preview.
 - All UI copy is Indonesian, direct, and specific to finding and downloading scans.
+
+## Penghapusan dokumen
+
+Tindakan hapus berada dalam preview agar admin bisa memeriksa dokumen sebelum menghapus. Merah memakai warna error yang sudah ada untuk membedakan tindakan hapus dari download. Konfirmasi muncul dalam dialog yang sama, menampilkan nama file, dan memfokuskan Batal; tombol membungkus pada layar sempit. Pengguna biasa tidak menerima kontrol hapus.
+
