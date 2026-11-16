@@ -47,7 +47,7 @@ L6260 -> aplikasi penerima scan -> Incoming
 
 **Aplikasi ini mengelola file hasil scan, bukan driver scanner atau pengganti protokol Epson Cloud.** Menjalankan web tidak otomatis membuat server muncul pada menu Scan > Computer di printer.
 
-Epson Scan 2 sudah tersedia di server milik pengguna. Penerimaan scan yang dimulai dari panel printer pada Windows Server 2022 masih harus diuji langsung di lokasi. Panduan L6260 menjelaskan ScanSmart untuk scan dari panel pada Windows modern. Dukungan driver scan tidak dengan sendirinya menjamin aplikasi penerima push-scan berjalan pada Windows Server.
+Penerimaan scan dari panel L6260 ke Windows Server 2022 sudah berhasil diuji di lokasi dengan Epson Scan 2, Epson Event Manager 3.11.82, dan ScanSmart 3.7.20. Panduan L6260 menjelaskan ScanSmart untuk scan dari panel pada Windows modern. Hasil pengujian ini berlaku pada server yang diuji; perilaku setelah desktop terkunci, logout, dan reboot belum diverifikasi.
 
 - [Panduan L6260: scan dari panel](https://download4.epson.biz/sec_pubs/l6260_series/useg/en/GUID-729B4AC0-133D-4722-9103-427E5C3E984D.htm)
 - [Driver dan aplikasi resmi L6260](https://www.epson.co.id/Printer-InkTank/L-Series/Epson-L6260/s/SPT_C11CJ62502)
@@ -269,6 +269,42 @@ Mulai/recycle situs, buka alamat HTTP server, lalu login dengan admin tersebut. 
 **Pastikan mode scan yang dipilih benar-benar menyimpan file tanpa menunggu konfirmasi pada desktop.** ScanSmart dapat membuka antarmuka di komputer; uji juga setelah lock screen, logout, dan reboot. Aplikasi desktop Epson mungkin membutuhkan sesi pengguna aktif. Web di IIS sendiri tidak membutuhkan sesi desktop aktif.
 
 Saat menyalin file manual/otomatis dari komputer lain, salin ke nama berakhiran `.partial` dahulu, lalu rename menjadi `.pdf`, `.jpg`, atau `.png` setelah penulisan selesai. Ini menghindari impor terlalu awal saat penulis menutup file sementara selama proses scan panjang.
+
+### Scan dari panel L6260 dengan ScanSmart
+
+1. Pasang Epson Scan 2, Epson Event Manager, dan Epson ScanSmart dari situs resmi Epson. Pada Epson Scan 2, pilih L6260 melalui IP LAN printer.
+2. Jalankan Event Manager pada desktop akun Windows penerima scan. Pada **Network Scan Settings**, aktifkan penerimaan scan jaringan dan beri nama alfanumerik, misalnya `ScanServer1`. Pastikan Event Manager berjalan lagi saat akun tersebut login melalui aplikasi startup atau Task Scheduler dengan trigger **At log on**. Pilih **Run only when user is logged on** untuk aplikasi desktop Epson.
+3. Izinkan komunikasi printer pada firewall jaringan kantor sesuai [panduan Epson](https://www.epson.co.uk/en_GB/faq/KA-01832): TCP/UDP 1865 dan 2968. Batasi sumber ke IP printer dan profil Domain/Private. Jika nama server belum tampil, periksa printer yang dipilih, aplikasi penerima, firewall, dan subnet.
+4. Buka ScanSmart, pilih L6260 yang benar, lalu gunakan **Document Mode**, ukuran A4 untuk dokumen A4. Mode foto dengan auto cropping dapat menghasilkan beberapa potongan gambar.
+5. Pada printer pilih **Scan > Computer > ScanServer1 > Save as PDF**. Pilihan **Preview on Computer** membuka layar ScanSmart dan masih membutuhkan tindakan Save pada desktop.
+
+Pada ScanSmart **3.7.20 yang diuji**, tombol panel **Save as PDF** menyimpan ke Documents milik akun penerima, meskipun tujuan Save biasa telah diatur ke Incoming. Gunakan penerusan berikut untuk menghubungkan hasil tersebut ke web tanpa mengubah lokasi seluruh Documents.
+
+Jalankan PowerShell sebagai administrator dari folder source. Ganti path Documents dengan milik **akun yang menjalankan ScanSmart**:
+
+```powershell
+.\scripts\Install-EpsonForwarder.ps1 `
+  -DocumentsFolder 'C:\Users\scanoperator\Documents' `
+  -InboxFolder 'C:\ProgramData\ScanInbox\Incoming'
+```
+
+Installer memasang script di `C:\ProgramData\ScanInbox\Tools` dan scheduled task **ScanInbox-EpsonPdfForwarder** sebagai SYSTEM, berjalan setiap menit dan saat startup. Jalankan ulang installer untuk memperbarui script atau mengganti folder sumber. Installer membatasi folder Tools dan script ke administrator/SYSTEM. Jika mengganti `InstallFolder`, gunakan direktori khusus untuk script ini karena izin direktorinya akan diatur ulang.
+
+- Hanya PDF di tingkat teratas dengan nama bawaan ScanSmart `Image_YYYYMMDD_NNNN.pdf` yang diteruskan. Pertahankan prefix **Image** serta pola tanggal/counter tersebut. PDF dengan nama lain dan dokumen dalam subfolder tidak diambil.
+- File harus berumur setidaknya 20 detik, dapat dibuka tanpa penulis aktif, dan memiliki penanda PDF. File disalin melalui `.partial`, kemudian diganti namanya setelah selesai.
+- File asli dipertahankan. File yang sama tidak disalin ulang. Jika nama dipakai lagi untuk isi berbeda, salinan baru memakai akhiran hash agar hasil sebelumnya tetap ada.
+- Tunggu sekitar **1–2 menit** setelah scan selesai sampai hasil tampil di web. Ini mencakup jadwal penyalinan, pemeriksaan importer, dan pembaruan galeri.
+- Log penyalinan/kegagalan: `C:\ProgramData\ScanInbox\Logs\epson-forward.log`. Task mengembalikan 0 jika tidak ada kegagalan; file yang terkunci akan dicoba lagi pada jadwal berikutnya.
+
+Untuk memeriksa task atau menghentikan penerusan:
+
+```powershell
+Get-ScheduledTaskInfo -TaskName 'ScanInbox-EpsonPdfForwarder'
+Get-Content 'C:\ProgramData\ScanInbox\Logs\epson-forward.log' -Tail 20
+Disable-ScheduledTask -TaskName 'ScanInbox-EpsonPdfForwarder'
+```
+
+Penerusan berjalan tanpa login desktop, tetapi **penerimaan scan oleh aplikasi Epson tetap membutuhkan sesi desktop akun penerima**. Uji kembali setelah restart dan login; menjalankan task penerusan sebagai SYSTEM tidak mengubah aplikasi Epson menjadi service.
 
 ## Penggunaan sehari-hari
 

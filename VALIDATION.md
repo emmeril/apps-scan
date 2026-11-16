@@ -144,12 +144,12 @@ Craftsmanship C-1 sampai C-5 PASS: alasan visual tercatat, kontrol bekerja, isi 
 
 ## Belum diverifikasi
 
-- Scan dari panel Epson L6260 ke Windows Server 2022, termasuk kondisi desktop terkunci/logout/reboot.
-- Akses dari komputer client lain serta scan printer fisik; pengujian IIS di bawah dilakukan dari browser yang berjalan pada server.
+- Penerimaan scan saat desktop terkunci/logout/reboot; penerimaan dari panel pada sesi desktop aktif sudah diuji seperti dicatat di bawah.
+- Akses dari komputer client lain; pengujian IIS di bawah dilakukan dari browser yang berjalan pada server.
 - Browser Safari/Firefox, screen reader, keyboard virtual HP fisik, dan volume dokumen besar.
 - PDF terenkripsi, semua variasi encoding/codec scanner, dan beban beberapa pengguna bersamaan.
 
-Pengujian otomatis awal memakai Kestrel loopback pada Windows Server 2022 dengan penyimpanan sementara dan dokumen contoh. Deployment IIS HTTP kemudian diverifikasi secara terpisah seperti di bawah. Integrasi printer masih membutuhkan pengujian fisik.
+Pengujian otomatis awal memakai Kestrel loopback pada Windows Server 2022 dengan penyimpanan sementara dan dokumen contoh. Deployment IIS HTTP dan penerimaan printer fisik kemudian diverifikasi secara terpisah seperti di bawah.
 
 ## Deployment IIS HTTP melalui IPv4
 
@@ -195,3 +195,18 @@ Permintaan pemilik: user biasa tidak dapat mengganti password sendiri. Admin tet
 - Pengujian memakai database dan akun sementara, terpisah dari akun/password server produksi.
 - Skenario pembatasan password juga dijalankan langsung pada paket Release yang akan dipasang: lulus, 6,2 detik termasuk startup.
 - Paket dipasang pada IIS setelah backup aplikasi dan Data. SHA-256 assembly di server cocok dengan paket Release; halaman Login merespons HTTP 200 dan AllowedHosts tetap "*".
+
+## Penerimaan Epson dan penerusan PDF
+
+Pengujian di lokasi, 16 November 2026, pada Windows Server 2022 dengan sesi desktop pengguna aktif:
+
+- Epson Scan 2 sudah terhubung ke L6260 melalui IP LAN. Installer Event Manager 3.11.82 dan ScanSmart 3.7.20 memiliki tanda tangan Authenticode Valid dari SEIKO EPSON CORPORATION; instalasi selesai dengan exit 0.
+- Event Manager berjalan pada sesi console pengguna, didaftarkan untuk berjalan saat pengguna tersebut login, dan menerima koneksi jaringan dari IP printer melalui aturan firewall terbatas. Pengguna mengonfirmasi nama server tampil pada panel.
+- Scan fisik berhasil dikirim dari panel. Mode Auto/Photo dengan auto cropping menghasilkan beberapa JPEG; profil kemudian diubah ke Document Mode dan ukuran A4.
+- PDF hasil panel diterima di Documents akun penerima. Pada ScanSmart 3.7.20, jalur tombol PDF menetapkan folder Documents secara langsung, terpisah dari konfigurasi Save biasa. Folder Documents keseluruhan tidak dipindahkan atau dibagikan.
+- PDF tersebut disalin ke Incoming dan muncul sebagai entri PDF pada database arsip. Scan fisik berikutnya masuk melalui layar preview; hasilnya disimpan ke Incoming dan juga berhasil diimpor. Kedua hasil ini belum membuktikan penerusan otomatis untuk scan fisik berikutnya.
+- `Install-EpsonForwarder.ps1` dipasang dan dijalankan ulang pada server. Task SYSTEM berjalan dengan hasil 0; folder script dan file script hanya memberi akses administrator/SYSTEM.
+- Pengujian fixture terpisah lulus untuk pengulangan tanpa duplikasi, nama sama dengan isi berbeda, pengabaian nama di luar pola, penolakan file tanpa penanda PDF, pengabaian file yang masih baru, dan pemeliharaan seluruh file sumber.
+- Uji fisik tambahan dengan pilihan panel Save as PDF untuk mengonfirmasi seluruh jalur otomatis masih menunggu pengguna. Lock/logout/reboot dan preview dokumen fisik melalui browser client belum diuji.
+
+Source publik hanya berisi script dan panduan umum; dokumen hasil scan, kredensial, konfigurasi aktual akun Windows, serta alamat jaringan kantor tidak dimasukkan ke repository.
