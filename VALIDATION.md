@@ -229,3 +229,16 @@ Source publik hanya berisi script dan panduan umum; dokumen hasil scan, kredensi
 - Origin IIS memberikan HTTP 200 pada Login dan Host header alternatif, serta 401 untuk katalog dan endpoint hapus tanpa login. Pengujian admin/user terautentikasi menggunakan data terpisah pada paket Release, tanpa mereset password produksi.
 
 Penanda penghapusan disimpan sebelum pembersihan file. Jika file terkunci, akses web sudah ditutup dan worker akan mengulang pembersihan; metadata dan file sumber tidak dibersihkan oleh tindakan hapus pada web.
+
+## Mempercepat masuknya hasil scan
+
+- Penerusan lama yang hanya berjalan sekali per menit diganti proses PowerShell menetap dengan `-Watch`, pemeriksaan setiap 1 detik, dan umur minimum file 2 detik. Task berjalan sebagai SYSTEM saat startup, tanpa batas durasi; status normal Running. Installer menghentikan task lama sebelum mengganti script dan mengatur restart jika proses gagal.
+- Dua pemeriksaan metadata yang stabil, penguncian terhadap penulis aktif, serta header dan penanda akhir PDF diperiksa sebelum penyalinan. Penyalinan tetap melalui `.partial` dan rename setelah selesai. File sumber dan perlindungan nama bentrok dipertahankan.
+- Cache metadata mencegah hash ulang seluruh PDF lama setiap detik. Pengujian restart proses memastikan file yang sudah diteruskan tidak disalin ulang. Isi baru dengan nama sama tetap menghasilkan salinan terpisah dengan akhiran hash.
+- Importer bawaan dan konfigurasi IIS aktif memakai PollSeconds=2 dan MinimumAgeSeconds=2. Galeri memeriksa setiap 2 detik dan saat tab kembali aktif. Permintaan otomatis yang lambat dibiarkan selesai, tanpa dibatalkan oleh interval berikutnya.
+- Pengujian baru mengirim PDF melalui proses penerusan asli, importer, dan galeri browser tanpa klik Perbarui. Latensi terukur 8.372 ms pada uji awal dan 5.869 ms pada seluruh suite terhadap paket Release. Angka ini adalah hasil fixture lokal setelah PDF selesai ditulis, belum mengukur durasi printer/ScanSmart.
+- PDF yang ditutup saat belum lengkap dan PDF lengkap dengan penulis masih aktif sama-sama tidak diteruskan. Setelah penulis menutup file, dokumen tampil otomatis; byte sumber dan tujuan cocok. Respons katalog yang ditunda 2,6 detik tetap diterima dengan interval galeri 2 detik.
+- Seluruh 9 skenario browser/integrasi lulus pada paket publish win-x64, sekitar 1,6 menit. Build Release dan parser seluruh script PowerShell yang diubah lulus.
+- Backup aplikasi, Data, konfigurasi task, serta script penerusan dibuat sebelum deployment. Hash assembly IIS cocok dengan paket, konfigurasi di luar dua interval dipertahankan, dan proses pemantau terpasang aktif dengan batas durasi nol.
+- Pemeriksaan setelah pemasangan memastikan akun/password/security stamp, metadata dokumen, penanda penghapusan, serta byte arsip aktif tetap sesuai sebelum pembaruan. HTTP melalui IP dan penerimaan Host header alternatif tetap bekerja; endpoint privat tetap menolak akses anonim.
+- Pemilik akan menguji scan printer fisik kemudian. Pengujian ini belum memastikan latensi dari panel printer, browser client fisik, atau perilaku setelah reboot/logout Windows.

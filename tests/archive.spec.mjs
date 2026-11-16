@@ -1,8 +1,10 @@
 import { test, expect } from '@playwright/test';
-import { writeFile, readFile, utimes, mkdir, rename, open, unlink } from 'node:fs/promises';
+import { writeFile, readFile, utimes, mkdir, rename, open, unlink, readdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { createHash } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
+import { spawn } from 'node:child_process';
+import { setTimeout as sleep } from 'node:timers/promises';
 import { samplePdf, samplePng } from './fixtures.mjs';
 
 test.describe.configure({ mode: 'serial' });
@@ -310,4 +312,74 @@ test('only admins delete scans with confirmation and CSRF; originals stay and de
     await put(name, Buffer.concat([samplePdf(), Buffer.from('\n% A new scan with changed content\n')]));
     await expect.poll(async () => (await list(page)).documents.some(d => d.name === name)).toBe(true);
     await context.close();
+});
+
+test('continuous Epson forwarding publishes within seconds and waits for complete unlocked PDFs', async ({ page, request }) => {
+    test.setTimeout(120000);
+    await expect.poll(async () => (await request.get('/Login')).status(), {
+        timeout: 65000, intervals: [1000]
+    }).toBe(200);
+    await login(page);
+    const documents = resolve(process.env.INBOX_TEST_RUNTIME, 'epson-documents');
+    const log = resolve(process.env.INBOX_TEST_RUNTIME, 'epson-forward.log');
+    await mkdir(documents);
+    const names = ['Image_20260101_0101.pdf', 'Image_20260101_0102.pdf'];
+    const script = resolve('scripts/Forward-EpsonScans.ps1');
+    let worker;
+    let exited;
+    let output = '';
+    const start = async () => {
+        worker = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
+            '-File', script, '-DocumentsFolder', documents, '-InboxFolder', inbox(), '-LogFile', log, '-Watch'],
+            { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+        exited = new Promise(done => worker.once('exit', done));
+        worker.stdout.on('data', data => { output += data; });
+        worker.stderr.on('data', data => { output += data; });
+        await expect.poll(async () => {
+            if (worker.exitCode !== null) throw new Error(output);
+            try { return (await readFile(log, 'utf8')).includes('Watching;'); } catch { return false; }
+        }).toBe(true);
+    };
+    const stop = async () => { if (worker?.exitCode === null) { worker.kill(); await exited; } };
+    let writer;
+    try {
+        await start();
+        const bytes = samplePdf();
+        const split = Math.floor(bytes.length / 2);
+        const staged = resolve(documents, names[0]);
+        await writeFile(staged, bytes.subarray(0, split));
+        await sleep(3200);
+        expect((await readdir(inbox())).includes(names[0])).toBe(false);
+        writer = await open(staged, 'a');
+        await writer.write(bytes.subarray(split));
+        await sleep(3200);
+        expect((await readdir(inbox())).includes(names[0])).toBe(false);
+        await writer.close();
+        writer = undefined;
+        await expect(page.getByRole('button', { name: `Preview ${names[0]}`, exact: true })).toBeVisible({ timeout: 12000 });
+        const started = Date.now();
+        await writeFile(resolve(documents, names[1]), bytes);
+        await expect(page.getByRole('button', { name: `Preview ${names[1]}`, exact: true })).toBeVisible({ timeout: 12000 });
+        const elapsed = Date.now() - started;
+        console.log(`Epson file-to-gallery latency: ${elapsed} ms`);
+        expect(elapsed).toBeLessThan(12000);
+        expect(await readFile(resolve(inbox(), names[1]))).toEqual(bytes);
+        expect(await readFile(resolve(documents, names[1]))).toEqual(bytes);
+        await stop();
+        await unlink(log);
+        await start();
+        await sleep(3200);
+        expect((await readdir(inbox())).filter(n => n.startsWith('Image_20260101_010'))).toHaveLength(2);
+        const copyLog = await readFile(log, 'utf8');
+        expect(copyLog).not.toContain('Copied ');
+        await writeFile(resolve(documents, names[1]), Buffer.concat([bytes, Buffer.from('\n% different scan\n')]));
+        await expect.poll(async () => (await readdir(inbox())).filter(n => n.startsWith('Image_20260101_0102-')).length).toBe(1);
+        const response = page.waitForResponse(r => r.url().includes('/api/documents?') && r.status() === 200);
+        await page.route('**/api/documents?**', async route => { await sleep(2600); await route.continue(); });
+        await response;
+        await page.unroute('**/api/documents?**');
+    } finally {
+        if (writer) await writer.close();
+        await stop();
+    }
 });

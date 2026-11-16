@@ -13,6 +13,7 @@ let currentType = '';
 let listSignature = '';
 let listController;
 let listGeneration = 0;
+let listLoading = false;
 let thumbnailGeneration = 0;
 let previewGeneration = 0;
 let pdfTask;
@@ -42,6 +43,8 @@ function message(text, error = false) {
 }
 
 async function loadDocuments(automatic = false) {
+    if (automatic && listLoading) return;
+    listLoading = true;
     const generation = ++listGeneration;
     listController?.abort();
     listController = new AbortController();
@@ -64,7 +67,7 @@ async function loadDocuments(automatic = false) {
         currentPage = data.page;
         currentPages = data.pages;
         $('result-heading').textContent = `${data.total} dokumen${currentSearch || currentType ? ' ditemukan' : ' bersama'}`;
-        $('sync-status').textContent = `Diperbarui ${new Intl.DateTimeFormat('id-ID', { timeStyle: 'short' }).format(new Date())} · Otomatis tiap 10 detik`;
+        $('sync-status').textContent = `Diperbarui ${new Intl.DateTimeFormat('id-ID', { timeStyle: 'short' }).format(new Date())} · Otomatis tiap 2 detik`;
         const warning = $('import-warning');
         warning.hidden = data.import.state === 'ready' && !data.import.skipped;
         warning.textContent = data.import.state === 'missing'
@@ -93,6 +96,7 @@ async function loadDocuments(automatic = false) {
         }
     } finally {
         if (generation === listGeneration) {
+            listLoading = false;
             $('refresh').disabled = false;
             gallery.setAttribute('aria-busy', 'false');
         }
@@ -359,5 +363,6 @@ window.addEventListener('resize', () => {
         else if (selected) sizeImage();
     }, 200);
 });
-setInterval(() => { if (!document.hidden) void loadDocuments(true); }, 10000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) void loadDocuments(true); });
+setInterval(() => { if (!document.hidden) void loadDocuments(true); }, 2000);
 void loadDocuments();

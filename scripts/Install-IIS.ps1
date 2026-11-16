@@ -68,7 +68,7 @@ Set-StoragePermissions $setup ''
 if ($LASTEXITCODE -ne 0) { throw 'Pengaturan izin folder aplikasi gagal.' }
 $config = [ordered]@{
     AllowedHosts = '*'
-    Storage = [ordered]@{InboxPath=$incoming;DataPath=$data;PollSeconds=5;MinimumAgeSeconds=10;MaximumFileMegabytes=100}
+    Storage = [ordered]@{InboxPath=$incoming;DataPath=$data;PollSeconds=2;MinimumAgeSeconds=2;MaximumFileMegabytes=100}
     Security = @{RequireHttps=$false}
 }
 $config | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $appRoot 'appsettings.Local.json') -Encoding UTF8

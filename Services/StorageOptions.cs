@@ -21,8 +21,8 @@ public sealed class StorageOptions {
         var maximumMb = config.GetValue("Storage:MaximumFileMegabytes", 100);
         return new StorageOptions {
             InboxPath = inbox, DataPath = data,
-            PollSeconds = Math.Clamp(config.GetValue("Storage:PollSeconds", 5), 2, 300),
-            MinimumAgeSeconds = Math.Clamp(config.GetValue("Storage:MinimumAgeSeconds", 10), 2, 3600),
+            PollSeconds = Math.Clamp(config.GetValue("Storage:PollSeconds", 2), 2, 300),
+            MinimumAgeSeconds = Math.Clamp(config.GetValue("Storage:MinimumAgeSeconds", 2), 2, 3600),
             MaximumBytes = Math.Clamp(maximumMb, 1, 1024) * 1024L * 1024L
         };
     }

@@ -14,7 +14,7 @@ Konfigurasi pemasangan yang dipilih pemilik: **HTTP melalui IP server**, misalny
 - Hapus dokumen dari preview khusus admin, dengan konfirmasi dan pemeriksaan izin pada server.
 - Galeri thumbnail PDF/JPEG/PNG, pencarian nama, filter PDF/gambar, dan pagination 24 dokumen.
 - Preview PDF per halaman, zoom/pas lebar, preview gambar, dan download file arsip.
-- Pembaruan galeri setiap 10 detik saat tab aktif.
+- Pembaruan galeri setiap 2 detik saat tab aktif, tanpa membatalkan permintaan otomatis yang masih berjalan.
 - Deteksi file yang stabil, batas ukuran, dan pemeriksaan penanda format sebelum impor.
 - Dokumen disalin ke arsip terpisah; file masuk asli tidak dihapus atau diubah.
 - Galeri dan endpoint file memerlukan login, termasuk permintaan rentang byte PDF.
@@ -194,8 +194,8 @@ Isi konfigurasi lokal:
   "Storage": {
     "InboxPath": "C:\\ProgramData\\ScanInbox\\Incoming",
     "DataPath": "C:\\ProgramData\\ScanInbox\\Data",
-    "PollSeconds": 5,
-    "MinimumAgeSeconds": 10,
+    "PollSeconds": 2,
+    "MinimumAgeSeconds": 2,
     "MaximumFileMegabytes": 100
   },
   "Security": { "RequireHttps": false }
@@ -263,7 +263,7 @@ Mulai/recycle situs, buka alamat HTTP server, lalu login dengan admin tersebut. 
 
 1. Di aplikasi Epson, atur hasil scan PDF/JPEG/PNG ke folder Incoming.
 2. Uji satu scan dari Epson Scan 2. Pastikan file muncul di Incoming.
-3. Tunggu sekitar 10 sampai 20 detik setelah file selesai ditulis, kemudian buka web.
+3. Tunggu beberapa detik setelah file selesai ditulis, kemudian buka web. Konfigurasi bawaan memeriksa folder setiap 2 detik dan menunggu umur file minimal 2 detik serta dua pemeriksaan stabil.
 4. Dokumen harus muncul dengan thumbnail. Klik dokumen, periksa preview, lalu download.
 5. Setelah jalur ini berhasil, uji scan dari **panel L6260 > Scan > Computer > server**. Jika nama server tidak muncul, selesaikan pengaturan penerima scan Epson secara terpisah; web tidak mendaftarkan tujuan ke printer.
 
@@ -289,23 +289,27 @@ Jalankan PowerShell sebagai administrator dari folder source. Ganti path Documen
   -InboxFolder 'C:\ProgramData\ScanInbox\Incoming'
 ```
 
-Installer memasang script di `C:\ProgramData\ScanInbox\Tools` dan scheduled task **ScanInbox-EpsonPdfForwarder** sebagai SYSTEM, berjalan setiap menit dan saat startup. Jalankan ulang installer untuk memperbarui script atau mengganti folder sumber. Installer membatasi folder Tools dan script ke administrator/SYSTEM. Jika mengganti `InstallFolder`, gunakan direktori khusus untuk script ini karena izin direktorinya akan diatur ulang.
+Installer memasang script di `C:\ProgramData\ScanInbox\Tools` dan scheduled task **ScanInbox-EpsonPdfForwarder** sebagai SYSTEM. Proses berjalan terus, memeriksa Documents setiap **1 detik**, dan mulai lagi saat Windows startup. Task mencoba restart jika proses gagal; status normalnya **Running**, dengan hasil task `267009` (sedang berjalan). Jalankan ulang installer untuk memperbarui script atau mengganti folder sumber; installer menghentikan proses lama sebelum mengganti script. Installer membatasi folder Tools dan script ke administrator/SYSTEM. Jika mengganti `InstallFolder`, gunakan direktori khusus untuk script ini karena izin direktorinya akan diatur ulang.
 
 - Hanya PDF di tingkat teratas dengan nama bawaan ScanSmart `Image_YYYYMMDD_NNNN.pdf` yang diteruskan. Pertahankan prefix **Image** serta pola tanggal/counter tersebut. PDF dengan nama lain dan dokumen dalam subfolder tidak diambil.
-- File harus berumur setidaknya 20 detik, dapat dibuka tanpa penulis aktif, dan memiliki penanda PDF. File disalin melalui `.partial`, kemudian diganti namanya setelah selesai.
+- File harus stabil pada dua pemeriksaan, berumur setidaknya **2 detik**, dapat dibuka tanpa penulis aktif, serta memiliki header dan penanda akhir PDF. File disalin melalui `.partial`, kemudian diganti namanya setelah selesai. File yang belum lengkap/masih terkunci dicoba lagi.
 - File asli dipertahankan. File yang sama tidak disalin ulang. Jika nama dipakai lagi untuk isi berbeda, salinan baru memakai akhiran hash agar hasil sebelumnya tetap ada.
-- Tunggu sekitar **1–2 menit** setelah scan selesai sampai hasil tampil di web. Ini mencakup jadwal penyalinan, pemeriksaan importer, dan pembaruan galeri.
-- Log penyalinan/kegagalan: `C:\ProgramData\ScanInbox\Logs\epson-forward.log`. Task mengembalikan 0 jika tidak ada kegagalan; file yang terkunci akan dicoba lagi pada jadwal berikutnya.
+- Dengan `PollSeconds=2`, `MinimumAgeSeconds=2`, dan tab browser aktif, target hasil tampil sekitar **5–10 detik setelah PDF selesai ditulis**. Waktu printer memindai dan ScanSmart membuat PDF berada sebelum tahap ini. File besar atau server sibuk dapat membutuhkan waktu lebih lama.
+- Log pemantauan/penyalinan/kegagalan: `C:\ProgramData\ScanInbox\Logs\epson-forward.log`. Ukuran dan waktu perubahan file yang sudah diperiksa disimpan dalam memori agar seluruh PDF lama tidak di-hash ulang setiap detik. Setelah restart, file yang sudah ada dikenali kembali melalui hash tanpa disalin ulang.
 
 Untuk memeriksa task atau menghentikan penerusan:
 
 ```powershell
 Get-ScheduledTaskInfo -TaskName 'ScanInbox-EpsonPdfForwarder'
+Get-ScheduledTask -TaskName 'ScanInbox-EpsonPdfForwarder' | Select-Object State
 Get-Content 'C:\ProgramData\ScanInbox\Logs\epson-forward.log' -Tail 20
+Stop-ScheduledTask -TaskName 'ScanInbox-EpsonPdfForwarder'
 Disable-ScheduledTask -TaskName 'ScanInbox-EpsonPdfForwarder'
 ```
 
 Penerusan berjalan tanpa login desktop, tetapi **penerimaan scan oleh aplikasi Epson tetap membutuhkan sesi desktop akun penerima**. Uji kembali setelah restart dan login; menjalankan task penerusan sebagai SYSTEM tidak mengubah aplikasi Epson menjadi service.
+
+Untuk instalasi lama, jalankan ulang `Install-EpsonForwarder.ps1`, lalu ubah `Storage:PollSeconds` dan `Storage:MinimumAgeSeconds` menjadi `2` pada `appsettings.Local.json`. Recycle pool IIS setelah menyimpan konfigurasi. Muat ulang halaman browser agar interval galeri baru digunakan. Nilai pada konfigurasi lokal mengalahkan bawaan paket.
 
 ## Penggunaan sehari-hari
 
@@ -333,7 +337,7 @@ Metadata dokumen serta penanda waktu dan ID admin yang menghapus tetap berada di
 
 Preview dirender sebagai gambar halaman; pencarian isi PDF/OCR, text selection, dan anotasi belum disediakan. Pencarian galeri berdasarkan nama file. Jam ditampilkan menurut zona waktu browser pengguna; database menyimpan waktu UTC. Label **Masuk** adalah waktu impor arsip, bukan waktu fisik dokumen dipindai.
 
-Pembaruan galeri otomatis setiap 10 detik saat tab aktif. Tombol **Perbarui** memeriksa daftar saat itu juga; tombol ini tidak memulai scan atau memaksa proses Epson.
+Pembaruan galeri otomatis setiap 2 detik saat tab aktif, dan diperiksa langsung saat kembali ke tab. Tombol **Perbarui** memeriksa daftar saat itu juga; tombol ini tidak memulai scan atau memaksa proses Epson.
 
 ### Mengelola akun
 
