@@ -204,9 +204,11 @@ Pengujian di lokasi, 16 November 2026, pada Windows Server 2022 dengan sesi desk
 - Event Manager berjalan pada sesi console pengguna, didaftarkan untuk berjalan saat pengguna tersebut login, dan menerima koneksi jaringan dari IP printer melalui aturan firewall terbatas. Pengguna mengonfirmasi nama server tampil pada panel.
 - Scan fisik berhasil dikirim dari panel. Mode Auto/Photo dengan auto cropping menghasilkan beberapa JPEG; profil kemudian diubah ke Document Mode dan ukuran A4.
 - PDF hasil panel diterima di Documents akun penerima. Pada ScanSmart 3.7.20, jalur tombol PDF menetapkan folder Documents secara langsung, terpisah dari konfigurasi Save biasa. Folder Documents keseluruhan tidak dipindahkan atau dibagikan.
-- PDF tersebut disalin ke Incoming dan muncul sebagai entri PDF pada database arsip. Scan fisik berikutnya masuk melalui layar preview; hasilnya disimpan ke Incoming dan juga berhasil diimpor. Kedua hasil ini belum membuktikan penerusan otomatis untuk scan fisik berikutnya.
+- PDF awal disalin ke Incoming dan muncul sebagai entri PDF pada database arsip. Scan melalui pilihan Preview on Computer masih memerlukan Save pada desktop; jalur ini juga berhasil diimpor.
 - `Install-EpsonForwarder.ps1` dipasang dan dijalankan ulang pada server. Task SYSTEM berjalan dengan hasil 0; folder script dan file script hanya memberi akses administrator/SYSTEM.
 - Pengujian fixture terpisah lulus untuk pengulangan tanpa duplikasi, nama sama dengan isi berbeda, pengabaian nama di luar pola, penolakan file tanpa penanda PDF, pengabaian file yang masih baru, dan pemeliharaan seluruh file sumber.
-- Uji fisik tambahan dengan pilihan panel Save as PDF untuk mengonfirmasi seluruh jalur otomatis masih menunggu pengguna. Lock/logout/reboot dan preview dokumen fisik melalui browser client belum diuji.
+- Uji fisik tambahan dari panel berhasil melalui seluruh jalur otomatis: PDF selesai di Documents, task meneruskan ke Incoming, lalu importer menambahkan entri arsip sekitar 50 detik setelah file scan selesai. Tidak ada tindakan Save atau penyalinan manual pada pengujian ini. Ukuran file dan SHA-256 salinan cocok dengan sumber; file asli tetap ada.
+- Nama hasil scan baru sama dengan PDF terdahulu di Incoming, tetapi isinya berbeda. Forwarder menyimpan file baru dengan akhiran hash dan importer mengarsipkannya sebagai dokumen terpisah, tanpa menimpa file lama.
+- Lock/logout/reboot dan preview dokumen fisik melalui browser client belum diuji.
 
 Source publik hanya berisi script dan panduan umum; dokumen hasil scan, kredensial, konfigurasi aktual akun Windows, serta alamat jaringan kantor tidak dimasukkan ke repository.
